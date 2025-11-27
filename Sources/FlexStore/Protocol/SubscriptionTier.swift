@@ -41,3 +41,9 @@ public protocol SubscriptionTier: Comparable, Hashable, CaseIterable, Sendable {
     /// Initialize from a product identifier.
     init?(productID: String)
 }
+
+public extension SubscriptionTier where Self: RawRepresentable, Self.RawValue: Comparable {
+    static func < (lhs: Self, rhs: Self) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}
