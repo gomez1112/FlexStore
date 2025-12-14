@@ -8,7 +8,7 @@ FlexStore gives you a clean way to:
 - **Gate UI** based on tier (hard gate + soft “blurred” paywall)
 - Use **Apple-native** subscription purchase UI with your own marketing content
 - Sell **non-consumables** and **consumables** with ergonomic SwiftUI buttons
-- Handle **consumables (hints/coins/credits)** with a tiny declarative mapping, optionally backed by **SwiftData**
+- Handle **consumables (hints/coins/credits/any custom currency)** with a declarative mapping, optionally backed by **SwiftData**
 
 > Platforms: iOS 17+, macOS 14+, tvOS 17+, watchOS 10+
 
@@ -107,7 +107,8 @@ struct MyApp: App {
 
         // Consumables
         "com.myapp.hints10",
-        "com.myapp.hints50"
+        "com.myapp.hints50",
+        "com.myapp.gems10"
     ]
 
     var body: some Scene {
@@ -126,8 +127,6 @@ struct MyApp: App {
 ---
 
 ### 3) Read state in views
-
-Use the environment to access the store.
 
 ```swift
 import SwiftUI
@@ -158,8 +157,6 @@ struct RootView: View {
 
 ### TierGate (hard gate)
 
-Shows `unlocked` only if the required tier is met.
-
 ```swift
 TierGate(requiredTier: .pro) {
     ProFeatureView()
@@ -169,8 +166,6 @@ TierGate(requiredTier: .pro) {
 ```
 
 ### BlurredTierGate (soft gate / paywall overlay)
-
-Blurs content and shows a paywall overlay with an upgrade button.
 
 ```swift
 @State private var showPaywall = false
@@ -187,7 +182,7 @@ BlurredTierGate(requiredTier: .pro, onUpgrade: { showPaywall = true }) {
 
 ## Apple-native subscription purchase UI (Paywall)
 
-Use `SubscriptionPassStoreView` to show the system subscription purchase UI and add your own marketing view.
+Use `SubscriptionPassStoreView` to show the system subscription UI and add your own marketing view.
 
 ```swift
 import SwiftUI
@@ -225,26 +220,15 @@ struct PaywallView: View {
 
 ### Non-consumable purchases
 
-Use `NonConsumablePurchaseButton`. It automatically disables itself when already owned.
-
 ```swift
-import SwiftUI
-import FlexStore
-
-struct LifetimePurchaseRow: View {
-    var body: some View {
-        NonConsumablePurchaseButton<AppTier>(
-            productID: "com.myapp.lifetime",
-            title: "Unlock Lifetime"
-        )
-        .buttonStyle(.borderedProminent)
-    }
-}
+NonConsumablePurchaseButton<AppTier>(
+    productID: "com.myapp.lifetime",
+    title: "Unlock Lifetime"
+)
+.buttonStyle(.borderedProminent)
 ```
 
 ### Consumable purchases
-
-Use `ConsumablePurchaseButton` for items like hints/coins/credits.
 
 ```swift
 ConsumablePurchaseButton<AppTier>(
@@ -255,43 +239,26 @@ ConsumablePurchaseButton<AppTier>(
 .buttonStyle(.borderedProminent)
 ```
 
-You can fully customize labels with the `label:` initializer if you want:
-
-```swift
-ConsumablePurchaseButton<AppTier>(productID: "com.myapp.hints50") { state in
-    switch state {
-    case .idle:        Text("Buy 50 Hints")
-    case .purchasing:  ProgressView()
-    case .success:     Label("Added", systemImage: "checkmark.circle.fill")
-    }
-}
-```
-
----
-
-## Restore + Manage Subscriptions
-
-### Restore Purchases
+### Restore + Manage Subscriptions
 
 ```swift
 RestorePurchasesButton<AppTier>()
     .buttonStyle(.bordered)
-```
 
-### Manage Subscriptions (opens Apple subscriptions page)
-
-```swift
 ManageSubscriptionsButton()
     .buttonStyle(.bordered)
 ```
 
 ---
 
-## Consumables: mapping product IDs → meaning (Catalog)
+## Consumables
 
-StoreKit gives you a `productID`. Your app decides what it’s worth. FlexStore makes that mapping tiny and declarative.
+StoreKit gives you a `productID`. Your app decides what it’s worth (10 hints, 500 coins, 25 gems, etc.).
+FlexStore keeps that mapping declarative.
 
-### Option A: Exact mapping
+### Product IDs → Grants (Catalog)
+
+#### Option A: Exact mapping
 
 ```swift
 var catalog = ConsumableCatalog()
@@ -299,9 +266,15 @@ catalog.registerExact("com.myapp.hints10", grant: .init(.hints, amount: 10))
 catalog.registerExact("com.myapp.hints50", grant: .init(.hints, amount: 50))
 ```
 
-### Option B: Suffix-int mapping (recommended)
+#### Option B: Suffix-int mapping (recommended)
 
-If your product IDs end with the quantity (e.g. `com.myapp.hints10`, `com.myapp.hints50`):
+If your product IDs end with the quantity:
+
+- `com.myapp.hints10`
+- `com.myapp.hints50`
+- `com.myapp.coins500`
+
+Then:
 
 ```swift
 var catalog = ConsumableCatalog()
@@ -309,76 +282,115 @@ catalog.registerSuffixInt(prefix: "com.myapp.hints", kind: .hints)
 catalog.registerSuffixInt(prefix: "com.myapp.coins", kind: .coins)
 ```
 
-Now `com.myapp.hints10` → 10 hints, `com.myapp.coins500` → 500 coins, etc.
-
 ---
 
-## Consumables + SwiftData (EconomyStore)
+## Custom Currencies (Gems, Energy, Tickets, Credits…)
 
-FlexStore includes a tiny “economy bridge” so you don’t write a giant `switch` or manual fetch/create logic.
+You **do not need to change FlexStore** for custom currencies.
 
-### 1) Create a SwiftData profile model (in your app)
+Use:
 
-Example:
+```swift
+ConsumableGrant.Kind.tokens(String)
+```
+
+### Catalog mapping for custom currencies
+
+```swift
+var catalog = ConsumableCatalog()
+
+// com.myapp.gems10 -> 10 gems
+catalog.registerSuffixInt(prefix: "com.myapp.gems", kind: .tokens("gems"))
+
+// com.myapp.energy25 -> 25 energy
+catalog.registerSuffixInt(prefix: "com.myapp.energy", kind: .tokens("energy"))
+```
+
+### SwiftData balances for custom currencies
+
+In your app:
 
 ```swift
 import SwiftData
 
 @Model
 final class GameProfile {
-    var hintBalance: Int = 0
-    var coinBalance: Int = 0
-
-    init() {}
+    var gems: Int = 0
+    var energy: Int = 0
 }
 ```
 
-### 2) Wire StoreKit → Catalog → SwiftData balances
+Register them:
+
+```swift
+var economy = SwiftDataEconomyStore<GameProfile>(
+    context: context,
+    createProfile: { GameProfile() }
+)
+
+economy.registerTokenBalance("gems", \GameProfile.gems)
+economy.registerTokenBalance("energy", \GameProfile.energy)
+
+store.installConsumables(catalog: catalog, economy: economy)
+```
+
+---
+
+## Advanced Consumables (bundles, caps, multiple fields)
+
+If a purchase should do more than “add to one Int field”, use `registerCustom`.
+
+### Example: cap gems at 999
+
+```swift
+economy.registerCustom(.tokens("gems")) { profile, amount in
+    profile.gems = min(profile.gems + amount, 999)
+}
+```
+
+### Example: starter bundle (adds multiple things)
+
+```swift
+// Map the product ID to a special “bundle” kind.
+catalog.registerExact(
+    "com.myapp.bundle.starter",
+    grant: .init(.tokens("starterBundle"), amount: 1)
+)
+
+economy.registerCustom(.tokens("starterBundle")) { profile, _ in
+    profile.gems += 50
+    profile.energy += 10
+}
+```
+
+---
+
+## SwiftData Wiring Example (end-to-end)
 
 ```swift
 import SwiftUI
 import SwiftData
 import FlexStore
 
+typealias Store = StoreKitService<AppTier>
+
 @MainActor
-func wireEconomy(store: StoreKitService<AppTier>, context: ModelContext) {
-    // Product ID → grant
+func wireEconomy(store: Store, context: ModelContext) {
     var catalog = ConsumableCatalog()
     catalog.registerSuffixInt(prefix: "com.myapp.hints", kind: .hints)
-    catalog.registerSuffixInt(prefix: "com.myapp.coins", kind: .coins)
+    catalog.registerSuffixInt(prefix: "com.myapp.gems",  kind: .tokens("gems"))
 
-    // Grant → SwiftData profile
     var economy = SwiftDataEconomyStore<GameProfile>(
         context: context,
         createProfile: { GameProfile() }
     )
     economy.registerBalance(.hints, \GameProfile.hintBalance)
-    economy.registerBalance(.coins, \GameProfile.coinBalance)
+    economy.registerTokenBalance("gems", \GameProfile.gems)
 
-    // Install: StoreKit -> catalog -> economy
     store.installConsumables(catalog: catalog, economy: economy)
 
-    // Optional: observe economy errors (surface an alert/toast if desired)
     store.onEconomyError = { error in
         print("Economy error:", error)
-    }
-}
-```
-
-> Tip: call `wireEconomy(...)` from a `.task {}` in a SwiftUI view that has access to `ModelContext`.
-
-Example:
-
-```swift
-struct ContentView: View {
-    @Environment(StoreKitService<AppTier>.self) private var store
-    @Environment(\.modelContext) private var context
-
-    var body: some View {
-        Text("Hello")
-            .task {
-                wireEconomy(store: store, context: context)
-            }
     }
 }
 ```
@@ -428,16 +440,6 @@ Key methods:
 - `EconomyStore`
 - `SwiftDataEconomyStore`
 - `StoreKitService.installConsumables(...)`
-
----
-
-## FAQ
-
-### Do I have to use SwiftData for consumables?
-No. If you don’t use SwiftData, implement your own `EconomyStore` (or just set `store.onConsumablePurchased` directly).
-
-### Why do I need a Catalog?
-StoreKit only tells you which product was purchased. Your app defines what that purchase means (10 hints, 500 coins, etc.). The catalog keeps that mapping declarative and tiny.
 
 ---
 
