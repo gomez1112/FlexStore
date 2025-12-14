@@ -5,27 +5,22 @@
 //  Created by Gerard Gomez on 11/27/25.
 //
 
-//
-//  SubscriptionPassStoreView.swift
-//  FlexStore
-//
-//  Created by Gerard Gomez on 11/27/25.
-//
 
 import SwiftUI
 import StoreKit
 
 /// A generic "Pass" store view wrapping `SubscriptionStoreView`.
+/// - Supports tier-based icons AND per-product icons (monthly vs yearly).
 public struct SubscriptionPassStoreView<Tier: SubscriptionTier, MarketingContent: View>: View {
     private let groupID: String
     private let visibleRelationships: Product.SubscriptionRelationship
-    private let iconProvider: (Tier) -> Image
+    private let iconProvider: (Tier, Product) -> Image
     private let marketing: () -> MarketingContent
     
     public init(
         groupID: String,
         visibleRelationships: Product.SubscriptionRelationship = .all,
-        iconProvider: @escaping (Tier) -> Image = { _ in Image(systemName: "star.fill") },
+        iconProvider: @escaping (Tier, Product) -> Image = { _, _ in Image(systemName: "star.fill") },
         @ViewBuilder marketing: @escaping () -> MarketingContent
     ) {
         self.groupID = groupID
@@ -41,15 +36,15 @@ public struct SubscriptionPassStoreView<Tier: SubscriptionTier, MarketingContent
                 .padding(.vertical, 30)
 #endif
         }
-        // FIX: The closure provides (Product, SubscriptionStoreControlInfo).
-        // We now use the product.id to resolve the Tier, as we removed the levelOfService mapping.
         .subscriptionStoreControlIcon { product, info in
+            // Prefer group-level mapping, fallback to productID mapping.
             let tier =
             Tier(levelOfService: info.groupLevel)
             ?? Tier(productID: product.id)
             ?? .defaultTier
             
-            iconProvider(tier).symbolVariant(.fill)
+            return iconProvider(tier, product)
+                .symbolVariant(.fill)
         }
 #if !os(watchOS)
         .subscriptionStoreButtonLabel(.multiline)
