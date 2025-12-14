@@ -65,7 +65,9 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     @ObservationIgnored
     public var onEconomyError: (@MainActor @Sendable (Error) -> Void)?
 
-    
+    @ObservationIgnored
+    private var processedConsumableTransactionIDs: Set<UInt64> = []
+
     // MARK: - Private
     
     @ObservationIgnored private let logger = Logger(subsystem: "FlexStore", category: "StoreKitService")
@@ -246,10 +248,13 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     // MARK: - Processing
     
     private func process(transaction: Transaction) async {
-        logger.info("Processing transaction: \(transaction.productID, privacy: .public)")
-        
         switch transaction.productType {
             case .consumable:
+                let id = transaction.id
+                guard !processedConsumableTransactionIDs.contains(id) else { return }
+                processedConsumableTransactionIDs.insert(id)
+                
+                guard transaction.revocationDate == nil else { return }
                 onConsumablePurchased?(transaction.productID)
                 
             case .nonConsumable, .nonRenewable:
@@ -268,6 +273,7 @@ public final class StoreKitService<Tier: SubscriptionTier> {
                 break
         }
     }
+
     
     private func updateNonConsumables() async {
         var active: Set<String> = []
