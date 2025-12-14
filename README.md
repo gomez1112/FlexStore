@@ -2,36 +2,33 @@
 
 A modern, SwiftUI-first wrapper around StoreKit 2.
 
-FlexStore gives you a clean way to:
-- **Define your own subscription tiers** (Free/Pro, Bronze/Silver/Gold, etc.)
-- **Attach a StoreKit service to the SwiftUI environment**
-- **Gate UI** based on tier (hard gate + soft “blurred” paywall)
-- Use **Apple-native** subscription purchase UI with your own marketing content
-- Sell **non-consumables** and **consumables** with ergonomic SwiftUI buttons
-- Handle **consumables (hints/coins/credits/any custom currency)** with a declarative mapping, optionally backed by **SwiftData**
+FlexStore helps you ship StoreKit with **clean APIs**, **Apple-native UI**, and ergonomic buttons—plus a flexible way to handle **consumables** (hints/coins/credits/custom currencies) and **custom paywalls**.
 
-> Platforms: iOS 17+, macOS 14+, tvOS 17+, watchOS 10+
+> **Platforms:** iOS 17+, macOS 14+, tvOS 17+, watchOS 10+  
+> **Tech:** StoreKit 2 + Swift Concurrency + `@Observable`
 
 ---
 
-## Features
+## Highlights
 
 - 🧩 **Custom tiers** via `SubscriptionTier`
-- 🔄 **Auto-sync** via transaction observation (updates + unfinished + entitlements)
-- 🧾 **Subscription status helpers** (renewal date, billing retry, free trial, upcoming plan)
+- 🔄 **Auto-sync** (transaction updates + unfinished + entitlements)
+- 🧾 **Subscription status helpers** (renewal date, trial, billing retry, upcoming plan)
 - 🔒 **UI gating**
   - `TierGate` (hard gate)
-  - `BlurredTierGate` (soft gate with a paywall overlay)
-- 🛍 **Pass UI** via `SubscriptionPassStoreView` (wraps Apple’s `SubscriptionStoreView`)
+  - `BlurredTierGate` (soft gate)
+- 🛍 **Apple-native subscription UI**
+  - `SubscriptionPassStoreView` (simple “marketing + picker”)
+  - `FlexSubscriptionPaywall` (fully-custom paywall layout like PlantPal)
 - 🧰 **Buttons**
   - `NonConsumablePurchaseButton`
   - `ConsumablePurchaseButton`
   - `RestorePurchasesButton`
   - `ManageSubscriptionsButton`
-- 🪙 **Consumables made easy**
-  - `ConsumableCatalog` maps product IDs → “what this means”
+- 🪙 **Consumables done right**
+  - `ConsumableCatalog` maps product IDs → grants
   - `EconomyStore` protocol
-  - `SwiftDataEconomyStore` applies grants to a SwiftData profile using key paths
+  - `SwiftDataEconomyStore` applies grants to SwiftData via key paths
   - `StoreKitService.installConsumables(...)` wires StoreKit → catalog → economy (+ error hook)
 
 ---
@@ -41,8 +38,9 @@ FlexStore gives you a clean way to:
 ### Swift Package Manager
 
 In Xcode:
+
 1. **File → Add Package Dependencies…**
-2. Paste your FlexStore repository URL
+2. Paste your FlexStore repo URL
 3. Add the **FlexStore** product to your target
 
 ---
@@ -51,8 +49,9 @@ In Xcode:
 
 ### 1) Define your tiers
 
-Create an enum conforming to `SubscriptionTier`. FlexStore can map tiers from:
-- **StoreKit subscription group level** (preferred)
+Define an enum conforming to `SubscriptionTier`. FlexStore can map tiers from:
+
+- **Subscription group level** (preferred)
 - **Product IDs** (fallback / explicit control)
 
 ```swift
@@ -64,12 +63,10 @@ enum AppTier: Int, SubscriptionTier {
 
     static var defaultTier: AppTier { .free }
 
-    // Preferred: map from Subscription Group “level of service”
     init?(levelOfService: Int) {
         self.init(rawValue: levelOfService)
     }
 
-    // Fallback: map by product ID
     init?(productID: String) {
         switch productID {
         case "com.myapp.pro.monthly", "com.myapp.pro.yearly":
@@ -83,9 +80,7 @@ enum AppTier: Int, SubscriptionTier {
 
 ---
 
-### 2) Attach FlexStore to your app
-
-Create a `StoreKitService<AppTier>` and attach it to your root view using `attachStoreKit(...)`.
+### 2) Attach FlexStore to your root view
 
 ```swift
 import SwiftUI
@@ -95,17 +90,16 @@ import FlexStore
 struct MyApp: App {
     @State private var store = StoreKitService<AppTier>()
 
-    private let subscriptionGroupID = "21345678"
-
+    private let groupID = "21345678"
     private let productIDs: Set<String> = [
-        // Subscriptions
+        // subscriptions
         "com.myapp.pro.monthly",
         "com.myapp.pro.yearly",
 
-        // Non-consumable
+        // non-consumable
         "com.myapp.lifetime",
 
-        // Consumables
+        // consumables
         "com.myapp.hints10",
         "com.myapp.hints50",
         "com.myapp.gems10"
@@ -116,7 +110,7 @@ struct MyApp: App {
             RootView()
                 .attachStoreKit(
                     manager: store,
-                    groupID: subscriptionGroupID,
+                    groupID: groupID,
                     ids: productIDs
                 )
         }
@@ -136,15 +130,10 @@ struct RootView: View {
     @Environment(StoreKitService<AppTier>.self) private var store
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             Text(store.isSubscribed ? "Subscribed ✅" : "Free Tier")
-
-            Text("Plan: \(store.planName)")
-                .foregroundStyle(.secondary)
-
-            Text(store.renewalStatusString)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            Text("Plan: \(store.planName)").foregroundStyle(.secondary)
+            Text(store.renewalStatusString).font(.footnote).foregroundStyle(.secondary)
         }
         .padding()
     }
@@ -180,45 +169,9 @@ BlurredTierGate(requiredTier: .pro, onUpgrade: { showPaywall = true }) {
 
 ---
 
-## Apple-native subscription purchase UI (Paywall)
+## Purchasing Buttons
 
-Use `SubscriptionPassStoreView` to show the system subscription UI and add your own marketing view.
-
-```swift
-import SwiftUI
-import FlexStore
-
-struct PaywallView: View {
-    var body: some View {
-        SubscriptionPassStoreView<AppTier, DefaultPassMarketingView>(
-            groupID: "21345678",
-            iconProvider: { tier in
-                switch tier {
-                case .free: Image(systemName: "leaf.fill")
-                case .pro:  Image(systemName: "star.fill")
-                }
-            }
-        ) {
-            DefaultPassMarketingView(
-                title: "Go Pro",
-                subtitle: "Unlock everything.",
-                features: [
-                    "Unlimited projects",
-                    "Advanced analytics",
-                    "Priority support"
-                ],
-                highlight: "Cancel anytime"
-            )
-        }
-    }
-}
-```
-
----
-
-## Purchasing
-
-### Non-consumable purchases
+### Non-consumable purchase
 
 ```swift
 NonConsumablePurchaseButton<AppTier>(
@@ -228,7 +181,7 @@ NonConsumablePurchaseButton<AppTier>(
 .buttonStyle(.borderedProminent)
 ```
 
-### Consumable purchases
+### Consumable purchase
 
 ```swift
 ConsumablePurchaseButton<AppTier>(
@@ -243,22 +196,176 @@ ConsumablePurchaseButton<AppTier>(
 
 ```swift
 RestorePurchasesButton<AppTier>()
-    .buttonStyle(.bordered)
-
 ManageSubscriptionsButton()
-    .buttonStyle(.bordered)
+```
+
+---
+
+## Apple-native Subscription UI
+
+### Option A: Simple marketing + picker (`SubscriptionPassStoreView`)
+
+Use Apple’s `SubscriptionStoreView` with your own marketing content.
+
+```swift
+import SwiftUI
+import FlexStore
+
+struct PaywallView: View {
+    var body: some View {
+        SubscriptionPassStoreView<AppTier, DefaultPassMarketingView>(
+            groupID: "21345678",
+            iconProvider: { tier, product in
+                // ✅ different icons for monthly vs yearly (or tiers)
+                switch product.id {
+                case "com.myapp.pro.yearly":  Image(systemName: "calendar.badge.clock")
+                case "com.myapp.pro.monthly": Image(systemName: "calendar")
+                default:
+                    switch tier {
+                    case .free: Image(systemName: "leaf.fill")
+                    case .pro:  Image(systemName: "star.fill")
+                    }
+                }
+            }
+        ) {
+            DefaultPassMarketingView(
+                title: "Go Pro",
+                subtitle: "Unlock everything.",
+                features: ["Unlimited projects", "Advanced analytics", "Priority support"],
+                highlight: "Cancel anytime"
+            )
+        }
+    }
+}
+```
+
+> **Note:** The `iconProvider` receives `(Tier, Product)` so you can differentiate monthly/yearly even if both map to `.pro`.
+
+---
+
+## Custom Paywall Layout (PlantPal-style)
+
+If you want a premium branded paywall (custom background, hero, feature list, etc.), use:
+
+- `FlexSubscriptionPaywall`
+- `FlexPaywallFeature`
+- `FlexDefaultFeatureRow` (optional default row)
+
+### 1) Define features
+
+`FlexPaywallFeature` uses `titleKey`/`subtitleKey` as **String localization keys** (Sendable-friendly).  
+`Text(feature.titleKey)` still localizes via `Localizable.strings`.
+
+```swift
+import FlexStore
+import SwiftUI
+
+let features: [FlexPaywallFeature] = [
+    .init(
+        systemImage: "bell.badge.fill",
+        titleKey: "paywall.feature.reminders.title",
+        subtitleKey: "paywall.feature.reminders.subtitle",
+        tint: .green
+    ),
+    .init(
+        systemImage: "paintpalette.fill",
+        titleKey: "paywall.feature.themes.title",
+        subtitleKey: "paywall.feature.themes.subtitle",
+        tint: .yellow
+    )
+]
+```
+
+### 2) Build a paywall view
+
+```swift
+import SwiftUI
+import FlexStore
+import StoreKit
+
+struct FancyPaywallView: View {
+    @Environment(\.dismiss) private var dismiss
+    private let groupID = "21345678"
+
+    var body: some View {
+        FlexSubscriptionPaywall<AppTier, HeaderView, BackgroundView, FlexDefaultFeatureRow>(
+            groupID: groupID,
+            sectionTitle: "What's Included",
+            features: features,
+            pickerItemMaterial: .ultraThickMaterial,
+            iconProvider: { tier, product in
+                // ✅ choose icons/badges by product ID (silver/gold/platinum/monthly/yearly)
+                switch product.id {
+                case "com.myapp.pro.yearly":  Image(systemName: "crown.fill")
+                case "com.myapp.pro.monthly": Image(systemName: "sparkles")
+                default:
+                    switch tier {
+                    case .free: Image(systemName: "leaf.fill")
+                    case .pro:  Image(systemName: "star.fill")
+                    }
+                }
+            },
+            onPurchaseCompletion: { _ in
+                dismiss()
+            },
+            background: {
+                BackgroundView()
+            },
+            header: {
+                HeaderView()
+            },
+            featureRow: { feature in
+                FlexDefaultFeatureRow(feature)
+            }
+        )
+    }
+}
+
+struct HeaderView: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "leaf.circle.fill")
+                .font(.system(size: 72))
+                .foregroundStyle(.white)
+            Text("Garden Pass")
+                .font(.system(.title, design: .rounded, weight: .bold))
+                .foregroundStyle(.white)
+            Text("Unlock premium features and themes.")
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.9))
+                .multilineTextAlignment(.center)
+        }
+        .padding(.top)
+        .padding(.horizontal)
+    }
+}
+
+struct BackgroundView: View {
+    var body: some View {
+        LinearGradient(
+            colors: [
+                Color(red: 0.10, green: 0.35, blue: 0.28),
+                Color(red: 0.18, green: 0.55, blue: 0.42),
+                Color(red: 0.28, green: 0.70, blue: 0.55).opacity(0.85)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
+    }
+}
 ```
 
 ---
 
 ## Consumables
 
-StoreKit gives you a `productID`. Your app decides what it’s worth (10 hints, 500 coins, 25 gems, etc.).
-FlexStore keeps that mapping declarative.
+StoreKit gives you a `productID`. Your app decides what it’s worth (10 hints, 500 coins, 25 gems, etc.).  
+FlexStore makes that mapping declarative.
 
 ### Product IDs → Grants (Catalog)
 
-#### Option A: Exact mapping
+#### Exact mapping
 
 ```swift
 var catalog = ConsumableCatalog()
@@ -266,15 +373,9 @@ catalog.registerExact("com.myapp.hints10", grant: .init(.hints, amount: 10))
 catalog.registerExact("com.myapp.hints50", grant: .init(.hints, amount: 50))
 ```
 
-#### Option B: Suffix-int mapping (recommended)
+#### Suffix-int mapping (recommended)
 
-If your product IDs end with the quantity:
-
-- `com.myapp.hints10`
-- `com.myapp.hints50`
-- `com.myapp.coins500`
-
-Then:
+Product IDs like: `com.myapp.hints10`, `com.myapp.hints50`, `com.myapp.coins500`
 
 ```swift
 var catalog = ConsumableCatalog()
@@ -286,41 +387,34 @@ catalog.registerSuffixInt(prefix: "com.myapp.coins", kind: .coins)
 
 ## Custom Currencies (Gems, Energy, Tickets, Credits…)
 
-You **do not need to change FlexStore** for custom currencies.
-
 Use:
 
 ```swift
-ConsumableGrant.Kind.tokens(String)
+ConsumableGrant.Kind.tokens("gems")
 ```
 
-### Catalog mapping for custom currencies
+### Catalog mapping
 
 ```swift
 var catalog = ConsumableCatalog()
-
-// com.myapp.gems10 -> 10 gems
 catalog.registerSuffixInt(prefix: "com.myapp.gems", kind: .tokens("gems"))
-
-// com.myapp.energy25 -> 25 energy
 catalog.registerSuffixInt(prefix: "com.myapp.energy", kind: .tokens("energy"))
 ```
 
-### SwiftData balances for custom currencies
-
-In your app:
+### SwiftData balances
 
 ```swift
 import SwiftData
 
 @Model
 final class GameProfile {
+    var hintBalance: Int = 0
     var gems: Int = 0
     var energy: Int = 0
 }
 ```
 
-Register them:
+Register key paths + install:
 
 ```swift
 var economy = SwiftDataEconomyStore<GameProfile>(
@@ -328,6 +422,7 @@ var economy = SwiftDataEconomyStore<GameProfile>(
     createProfile: { GameProfile() }
 )
 
+economy.registerBalance(.hints, \GameProfile.hintBalance)
 economy.registerTokenBalance("gems", \GameProfile.gems)
 economy.registerTokenBalance("energy", \GameProfile.energy)
 
@@ -336,11 +431,11 @@ store.installConsumables(catalog: catalog, economy: economy)
 
 ---
 
-## Advanced Consumables (bundles, caps, multiple fields)
+## Advanced Consumables (caps, bundles, multiple fields)
 
-If a purchase should do more than “add to one Int field”, use `registerCustom`.
+Use `registerCustom` when a purchase needs more than “add to one Int”.
 
-### Example: cap gems at 999
+### Cap gems at 999
 
 ```swift
 economy.registerCustom(.tokens("gems")) { profile, amount in
@@ -348,10 +443,9 @@ economy.registerCustom(.tokens("gems")) { profile, amount in
 }
 ```
 
-### Example: starter bundle (adds multiple things)
+### Starter bundle (adds multiple things)
 
 ```swift
-// Map the product ID to a special “bundle” kind.
 catalog.registerExact(
     "com.myapp.bundle.starter",
     grant: .init(.tokens("starterBundle"), amount: 1)
@@ -365,43 +459,11 @@ economy.registerCustom(.tokens("starterBundle")) { profile, _ in
 
 ---
 
-## SwiftData Wiring Example (end-to-end)
-
-```swift
-import SwiftUI
-import SwiftData
-import FlexStore
-
-typealias Store = StoreKitService<AppTier>
-
-@MainActor
-func wireEconomy(store: Store, context: ModelContext) {
-    var catalog = ConsumableCatalog()
-    catalog.registerSuffixInt(prefix: "com.myapp.hints", kind: .hints)
-    catalog.registerSuffixInt(prefix: "com.myapp.gems",  kind: .tokens("gems"))
-
-    var economy = SwiftDataEconomyStore<GameProfile>(
-        context: context,
-        createProfile: { GameProfile() }
-    )
-    economy.registerBalance(.hints, \GameProfile.hintBalance)
-    economy.registerTokenBalance("gems", \GameProfile.gems)
-
-    store.installConsumables(catalog: catalog, economy: economy)
-
-    store.onEconomyError = { error in
-        print("Economy error:", error)
-    }
-}
-```
-
----
-
 ## API Reference (high level)
 
 ### StoreKitService
 
-Key properties:
+Properties (selected):
 - `subscriptionTier: Tier`
 - `isSubscribed: Bool`
 - `products: [Product]`
@@ -409,15 +471,15 @@ Key properties:
 - `renewalStatusString: String`
 - `planName: String`
 - `onConsumablePurchased: ((String) -> Void)?`
-- `onEconomyError: ((Error) -> Void)?`
+- `onEconomyError: (@MainActor (Error) -> Void)?`
 
-Key methods:
+Methods (selected):
 - `configure(productIDs:subscriptionGroupID:) async`
 - `purchase(productID:) async throws`
 - `restorePurchases() async`
 - `refreshSubscriptionStatus(groupID:) async`
 
-### View helpers
+### View helper
 - `View.attachStoreKit(manager:groupID:ids:)`
 
 ### UI gating
@@ -427,6 +489,9 @@ Key methods:
 ### Store UI
 - `SubscriptionPassStoreView`
 - `DefaultPassMarketingView`
+- `FlexSubscriptionPaywall`
+- `FlexPaywallFeature`
+- `FlexDefaultFeatureRow`
 
 ### Buttons
 - `NonConsumablePurchaseButton`
