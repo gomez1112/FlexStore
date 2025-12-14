@@ -4,37 +4,105 @@
 //
 //  Created by Gerard Gomez on 12/14/25.
 //
-
 import SwiftUI
 
-/// Not nested inside a generic type -> avoids the “parent type” conversion problem.
+// MARK: - State
+
 public enum FlexStoreConsumablePurchaseState: Equatable, Sendable {
     case idle
     case purchasing
     case success
 }
 
-public struct ConsumablePurchaseButton<Tier: SubscriptionTier, Label: View>: View {
+// MARK: - Default Label
+
+public struct FlexStoreDefaultConsumableLabel: View {
+    let state: FlexStoreConsumablePurchaseState
+    let title: LocalizedStringKey
+    let successTitle: LocalizedStringKey
+    
+    public init(
+        state: FlexStoreConsumablePurchaseState,
+        title: LocalizedStringKey,
+        successTitle: LocalizedStringKey
+    ) {
+        self.state = state
+        self.title = title
+        self.successTitle = successTitle
+    }
+    
+    public var body: some View {
+        switch state {
+            case .purchasing:
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Processing…")
+                }
+            case .success:
+                Label(successTitle, systemImage: "checkmark.circle.fill")
+            case .idle:
+                Text(title)
+        }
+    }
+}
+
+// MARK: - Public Button (clean call site)
+
+public struct ConsumablePurchaseButton<Tier: SubscriptionTier>: View {
+    private let productID: String
+    private let title: LocalizedStringKey
+    private let successTitle: LocalizedStringKey
+    private let resetAfter: Duration?
+    
+    public init(
+        productID: String,
+        title: LocalizedStringKey = "Buy",
+        successTitle: LocalizedStringKey = "Added",
+        resetAfter: Duration? = .seconds(1.2)
+    ) {
+        self.productID = productID
+        self.title = title
+        self.successTitle = successTitle
+        self.resetAfter = resetAfter
+    }
+    
+    public var body: some View {
+        _ConsumablePurchaseButtonImpl<Tier, FlexStoreDefaultConsumableLabel>(
+            productID: productID,
+            resetAfter: resetAfter
+        ) { state in
+            FlexStoreDefaultConsumableLabel(state: state, title: title, successTitle: successTitle)
+        }
+    }
+}
+
+// MARK: - Custom Label API (no extra generics at call site)
+
+public extension ConsumablePurchaseButton {
+    func label<Label: View>(
+        @ViewBuilder _ builder: @escaping (FlexStoreConsumablePurchaseState) -> Label
+    ) -> some View {
+        _ConsumablePurchaseButtonImpl<Tier, Label>(
+            productID: productID,
+            resetAfter: resetAfter,
+            label: builder
+        )
+    }
+}
+
+// MARK: - Implementation (internal)
+
+private struct _ConsumablePurchaseButtonImpl<Tier: SubscriptionTier, Label: View>: View {
     @Environment(StoreKitService<Tier>.self) private var store
     
-    private let productID: String
-    private let resetAfter: Duration?
-    private let label: (FlexStoreConsumablePurchaseState) -> Label
+    let productID: String
+    let resetAfter: Duration?
+    let label: (FlexStoreConsumablePurchaseState) -> Label
     
     @State private var state: FlexStoreConsumablePurchaseState = .idle
     @State private var alert: FlexStoreError?
     
-    public init(
-        productID: String,
-        resetAfter: Duration? = .seconds(1.2),
-        @ViewBuilder label: @escaping (FlexStoreConsumablePurchaseState) -> Label
-    ) {
-        self.productID = productID
-        self.resetAfter = resetAfter
-        self.label = label
-    }
-    
-    public var body: some View {
+    var body: some View {
         Button {
             Task { @MainActor in
                 await purchase()
@@ -85,53 +153,4 @@ public struct ConsumablePurchaseButton<Tier: SubscriptionTier, Label: View>: Vie
     }
 }
 
-// MARK: - Default Label (no AnyView)
-
-public extension ConsumablePurchaseButton where Label == FlexStoreDefaultConsumableLabel {
-    /// Nice call site:
-    /// `ConsumablePurchaseButton<AppTier>(productID: "com.app.hints10")`
-    init(
-        productID: String,
-        title: LocalizedStringKey = "Buy",
-        successTitle: LocalizedStringKey = "Added"
-    ) {
-        self.init(productID: productID) { state in
-            FlexStoreDefaultConsumableLabel(
-                state: state,
-                title: title,
-                successTitle: successTitle
-            )
-        }
-    }
-}
-
-public struct FlexStoreDefaultConsumableLabel: View {
-    let state: FlexStoreConsumablePurchaseState
-    let title: LocalizedStringKey
-    let successTitle: LocalizedStringKey
-    
-    public init(
-        state: FlexStoreConsumablePurchaseState,
-        title: LocalizedStringKey,
-        successTitle: LocalizedStringKey
-    ) {
-        self.state = state
-        self.title = title
-        self.successTitle = successTitle
-    }
-    
-    public var body: some View {
-        switch state {
-            case .purchasing:
-                HStack(spacing: 8) {
-                    ProgressView()
-                    Text("Processing…")
-                }
-            case .success:
-                Label(successTitle, systemImage: "checkmark.circle.fill")
-            case .idle:
-                Text(title)
-        }
-    }
-}
 

@@ -6,31 +6,97 @@
 
 import SwiftUI
 
-/// Not nested inside a generic type -> avoids “parent type” conversion issues.
+// MARK: - State
+
 public enum FlexStoreNonConsumablePurchaseState: Equatable, Sendable {
     case idle
     case purchasing
     case purchased
 }
 
-public struct NonConsumablePurchaseButton<Tier: SubscriptionTier, Label: View>: View {
+// MARK: - Default Label
+
+public struct FlexStoreDefaultNonConsumableLabel: View {
+    let state: FlexStoreNonConsumablePurchaseState
+    let title: LocalizedStringKey
+    let purchasedTitle: LocalizedStringKey
+    
+    public init(
+        state: FlexStoreNonConsumablePurchaseState,
+        title: LocalizedStringKey,
+        purchasedTitle: LocalizedStringKey
+    ) {
+        self.state = state
+        self.title = title
+        self.purchasedTitle = purchasedTitle
+    }
+    
+    public var body: some View {
+        switch state {
+            case .purchasing:
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Purchasing…")
+                }
+            case .purchased:
+                Label(purchasedTitle, systemImage: "checkmark.circle.fill")
+            case .idle:
+                Text(title)
+        }
+    }
+}
+
+// MARK: - Public Button (clean call site)
+
+public struct NonConsumablePurchaseButton<Tier: SubscriptionTier>: View {
+    private let productID: String
+    private let title: LocalizedStringKey
+    private let purchasedTitle: LocalizedStringKey
+    
+    public init(
+        productID: String,
+        title: LocalizedStringKey = "Purchase",
+        purchasedTitle: LocalizedStringKey = "Purchased"
+    ) {
+        self.productID = productID
+        self.title = title
+        self.purchasedTitle = purchasedTitle
+    }
+    
+    public var body: some View {
+        _NonConsumablePurchaseButtonImpl<Tier, FlexStoreDefaultNonConsumableLabel>(
+            productID: productID
+        ) { state in
+            FlexStoreDefaultNonConsumableLabel(state: state, title: title, purchasedTitle: purchasedTitle)
+        }
+    }
+}
+
+// MARK: - Custom Label API
+
+public extension NonConsumablePurchaseButton {
+    func label<Label: View>(
+        @ViewBuilder _ builder: @escaping (FlexStoreNonConsumablePurchaseState) -> Label
+    ) -> some View {
+        _NonConsumablePurchaseButtonImpl<Tier, Label>(
+            productID: productID,
+            label: builder
+        )
+    }
+}
+
+// MARK: - Implementation (internal)
+
+private struct _NonConsumablePurchaseButtonImpl<Tier: SubscriptionTier, Label: View>: View {
     @Environment(StoreKitService<Tier>.self) private var store
     
-    private let productID: String
-    private let label: (FlexStoreNonConsumablePurchaseState) -> Label
+    let productID: String
+    let label: (FlexStoreNonConsumablePurchaseState) -> Label
     
     @State private var state: FlexStoreNonConsumablePurchaseState = .idle
     @State private var alert: FlexStoreError?
     
-    public init(
-        productID: String,
-        @ViewBuilder label: @escaping (FlexStoreNonConsumablePurchaseState) -> Label
-    ) {
-        self.productID = productID
-        self.label = label
-    }
-    
-    public var body: some View {
+    var body: some View {
         let alreadyOwned = store.purchasedNonConsumables.contains(productID)
         
         Button {
@@ -72,7 +138,7 @@ public struct NonConsumablePurchaseButton<Tier: SubscriptionTier, Label: View>: 
             let outcome = try await store.purchase(productID: productID)
             switch outcome {
                 case .success:
-                    // StoreKitService processes + finishes transactions.
+                    // StoreKitService will process entitlement updates.
                     break
                 case .cancelled:
                     alert = FlexStoreError(title: "Cancelled", message: "Purchase was cancelled.")
@@ -87,52 +153,3 @@ public struct NonConsumablePurchaseButton<Tier: SubscriptionTier, Label: View>: 
     }
 }
 
-// MARK: - Default Label (no AnyView)
-
-public extension NonConsumablePurchaseButton where Label == FlexStoreDefaultNonConsumableLabel {
-    /// Nice call site:
-    /// `NonConsumablePurchaseButton<AppTier>(productID: "com.myapp.lifetime")`
-    init(
-        productID: String,
-        title: LocalizedStringKey = "Purchase",
-        purchasedTitle: LocalizedStringKey = "Purchased"
-    ) {
-        self.init(productID: productID) { state in
-            FlexStoreDefaultNonConsumableLabel(
-                state: state,
-                title: title,
-                purchasedTitle: purchasedTitle
-            )
-        }
-    }
-}
-
-public struct FlexStoreDefaultNonConsumableLabel: View {
-    let state: FlexStoreNonConsumablePurchaseState
-    let title: LocalizedStringKey
-    let purchasedTitle: LocalizedStringKey
-    
-    public init(
-        state: FlexStoreNonConsumablePurchaseState,
-        title: LocalizedStringKey,
-        purchasedTitle: LocalizedStringKey
-    ) {
-        self.state = state
-        self.title = title
-        self.purchasedTitle = purchasedTitle
-    }
-    
-    public var body: some View {
-        switch state {
-            case .purchasing:
-                HStack(spacing: 8) {
-                    ProgressView()
-                    Text("Purchasing…")
-                }
-            case .purchased:
-                Label(purchasedTitle, systemImage: "checkmark.circle.fill")
-            case .idle:
-                Text(title)
-        }
-    }
-}

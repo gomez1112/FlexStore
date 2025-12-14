@@ -6,43 +6,7 @@
 
 import SwiftUI
 
-public struct RestorePurchasesButton<Tier: SubscriptionTier, Label: View>: View {
-    @Environment(StoreKitService<Tier>.self) private var store
-    @State private var isRestoring = false
-    
-    private let label: (Bool) -> Label
-    
-    public init(@ViewBuilder label: @escaping (Bool) -> Label) {
-        self.label = label
-    }
-    
-    public var body: some View {
-        Button {
-            Task { @MainActor in
-                guard !isRestoring else { return }
-                isRestoring = true
-                defer { isRestoring = false }
-                await store.restorePurchases()
-            }
-        } label: {
-            label(isRestoring)
-        }
-        .disabled(isRestoring)
-    }
-}
-
-// MARK: - Default Label (no AnyView)
-
-public extension RestorePurchasesButton where Label == FlexStoreDefaultRestoreLabel {
-    /// Nice call site:
-    /// `RestorePurchasesButton<AppTier>()`
-    /// or `RestorePurchasesButton<AppTier>(title: "Restore")`
-    init(title: LocalizedStringKey = "Restore Purchases") {
-        self.init { isRestoring in
-            FlexStoreDefaultRestoreLabel(isRestoring: isRestoring, title: title)
-        }
-    }
-}
+// MARK: - Default Label
 
 public struct FlexStoreDefaultRestoreLabel: View {
     let isRestoring: Bool
@@ -64,4 +28,54 @@ public struct FlexStoreDefaultRestoreLabel: View {
         }
     }
 }
+
+// MARK: - Public Button (clean call site)
+
+public struct RestorePurchasesButton<Tier: SubscriptionTier>: View {
+    private let title: LocalizedStringKey
+    
+    public init(title: LocalizedStringKey = "Restore Purchases") {
+        self.title = title
+    }
+    
+    public var body: some View {
+        _RestorePurchasesButtonImpl<Tier, FlexStoreDefaultRestoreLabel> { isRestoring in
+            FlexStoreDefaultRestoreLabel(isRestoring: isRestoring, title: title)
+        }
+    }
+}
+
+// MARK: - Custom Label API
+
+public extension RestorePurchasesButton {
+    func label<Label: View>(
+        @ViewBuilder _ builder: @escaping (Bool) -> Label
+    ) -> some View {
+        _RestorePurchasesButtonImpl<Tier, Label>(label: builder)
+    }
+}
+
+// MARK: - Implementation (internal)
+
+private struct _RestorePurchasesButtonImpl<Tier: SubscriptionTier, Label: View>: View {
+    @Environment(StoreKitService<Tier>.self) private var store
+    @State private var isRestoring = false
+    
+    let label: (Bool) -> Label
+    
+    var body: some View {
+        Button {
+            Task { @MainActor in
+                guard !isRestoring else { return }
+                isRestoring = true
+                defer { isRestoring = false }
+                await store.restorePurchases()
+            }
+        } label: {
+            label(isRestoring)
+        }
+        .disabled(isRestoring)
+    }
+}
+
 
