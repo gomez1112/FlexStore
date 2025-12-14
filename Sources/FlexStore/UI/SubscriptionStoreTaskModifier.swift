@@ -14,23 +14,16 @@ private struct StoreKitAttachModifier<Tier: SubscriptionTier>: ViewModifier {
     
     @Environment(\.scenePhase) private var scenePhase
     
+    private var taskKey: String {
+        let idsKey = productIDs.sorted().joined(separator: "|")
+        return "\(groupID ?? "")::\(idsKey)"
+    }
+    
     func body(content: Content) -> some View {
         content
             .environment(manager)
-            .task(id: productIDs) {
-                if !productIDs.isEmpty {
-                    await manager.loadProducts(productIDs)
-                }
-            }
-            .task(id: groupID) {
-                // Configure group ID + refresh when it changes
-                if let groupID {
-                    await manager.refreshSubscriptionStatus(groupID: groupID)
-                }
-            }
-            .task {
-                // Ensure non-consumables are hydrated on first appearance
-                await manager.configure(productIDs: [], subscriptionGroupID: nil)
+            .task(id: taskKey) {
+                await manager.configure(productIDs: productIDs, subscriptionGroupID: groupID)
             }
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active, let groupID else { return }

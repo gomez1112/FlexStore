@@ -43,10 +43,13 @@ public struct SubscriptionPassStoreView<Tier: SubscriptionTier, MarketingContent
         }
         // FIX: The closure provides (Product, SubscriptionStoreControlInfo).
         // We now use the product.id to resolve the Tier, as we removed the levelOfService mapping.
-        .subscriptionStoreControlIcon { product, _ in
-            let tier = Tier(productID: product.id) ?? .defaultTier
-            iconProvider(tier)
-                .symbolVariant(.fill)
+        .subscriptionStoreControlIcon { product, info in
+            let tier =
+            Tier(levelOfService: info.groupLevel)
+            ?? Tier(productID: product.id)
+            ?? .defaultTier
+            
+            iconProvider(tier).symbolVariant(.fill)
         }
 #if !os(watchOS)
         .subscriptionStoreButtonLabel(.multiline)

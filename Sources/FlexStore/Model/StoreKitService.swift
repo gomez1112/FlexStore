@@ -280,7 +280,12 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     // MARK: - Tier Calculation
     
     private func findEffectiveStatus(from statuses: [Product.SubscriptionInfo.Status]) -> Product.SubscriptionInfo.Status? {
-        statuses.max { tier(for: $0) < tier(for: $1) }
+        let activeStates: Set<Product.SubscriptionInfo.RenewalState> = [
+            .subscribed, .inGracePeriod, .inBillingRetryPeriod
+        ]
+        
+        let active = statuses.filter { activeStates.contains($0.state) }
+        return active.max { tier(for: $0) < tier(for: $1) }
     }
     
     private func calculateTier(from statuses: [Product.SubscriptionInfo.Status]) -> Tier {
