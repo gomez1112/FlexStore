@@ -8,18 +8,19 @@ import StoreKit
 import OSLog
 import Observation
 
-/// A generic StoreKit 2 manager that tracks Tier state, Entitlements, and Products.
 @Observable
 @MainActor
 public final class StoreKitService<Tier: SubscriptionTier> {
     
     // MARK: - Public State
+    
     public private(set) var subscriptionTier: Tier = .defaultTier
     public private(set) var purchasedNonConsumables: Set<String> = []
     public private(set) var products: [Product] = []
     public private(set) var isLoading: Bool = false
     
-    // MARK: - Subscription Details
+    // MARK: - Subscription Details (Optional UI Helpers)
+    
     public private(set) var renewalDate: Date?
     public private(set) var willAutoRenew: Bool = false
     public private(set) var autoRenewPreferenceID: String?
@@ -27,42 +28,10 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     
     public private(set) var isFreeTrial: Bool = false
     public private(set) var isBillingRetry: Bool = false
-    public private(set) var isGracePeriod: Bool = false
     
-    // MARK: - Callbacks
-    @ObservationIgnored
-    public var onConsumablePurchased: ((String) -> Void)?
-    
-    @ObservationIgnored
-    private let logger = Logger(subsystem: "FlexStore", category: "StoreKitService")
-    
-    @ObservationIgnored
-    private var configuredGroupID: String?
-    
-    @ObservationIgnored
-    private var transactionTask: Task<Void, Never>?
-    
-    // MARK: - Init
-    public init() {
-        startObserving()
-    }
-    
-    deinit {
-        transactionTask?.cancel()
-    }
-    
-    // MARK: - Computed Helpers
-    public var isSubscribed: Bool {
-        subscriptionTier != Tier.defaultTier
-    }
-    
-    public var activeProductID: String? {
-        currentSubscriptionProduct?.id
-    }
-    
-    public var planName: String {
-        currentSubscriptionProduct?.displayName ?? "Inactive"
-    }
+    public var isSubscribed: Bool { subscriptionTier != Tier.defaultTier }
+    public var activeProductID: String? { currentSubscriptionProduct?.id }
+    public var planName: String { currentSubscriptionProduct?.displayName ?? "Inactive" }
     
     public var upcomingPlanName: String? {
         guard let nextID = autoRenewPreferenceID,
@@ -73,9 +42,8 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     
     public var renewalStatusString: String {
         if isBillingRetry { return "Payment Failed - Update Info" }
-        if isGracePeriod { return "Payment Due - Service Active" }
-        
         guard let date = renewalDate else { return "No active subscription" }
+        
         let dateString = date.formatted(date: .abbreviated, time: .omitted)
         
         if willAutoRenew {
@@ -89,7 +57,43 @@ public final class StoreKitService<Tier: SubscriptionTier> {
         }
     }
     
-    // MARK: - Public API
+    // MARK: - Hooks
+    
+    @ObservationIgnored
+    public var onConsumablePurchased: ((String) -> Void)?
+    
+    // MARK: - Private
+    
+    @ObservationIgnored private let logger = Logger(subsystem: "FlexStore", category: "StoreKitService")
+    
+    @ObservationIgnored private var configuredGroupID: String?
+    @ObservationIgnored private var observingTasks: [Task<Void, Never>] = []
+    
+    public init() {
+        startObservingTransactions()
+    }
+    
+    deinit {
+        observingTasks.forEach { $0.cancel() }
+    }
+    
+    // MARK: - Configuration
+    
+    /// Convenience configuration call.
+    /// Call this from a `.task` in your app (or via `View.attachStoreKit(...)`).
+    public func configure(productIDs: Set<String>, subscriptionGroupID: String?) async {
+        if !productIDs.isEmpty {
+            await loadProducts(productIDs)
+        }
+        await updateNonConsumables()
+        
+        if let subscriptionGroupID {
+            await refreshSubscriptionStatus(groupID: subscriptionGroupID)
+        }
+    }
+    
+    // MARK: - Product Loading
+    
     public func loadProducts(_ ids: Set<String>) async {
         isLoading = true
         defer { isLoading = false }
@@ -102,8 +106,31 @@ public final class StoreKitService<Tier: SubscriptionTier> {
         }
     }
     
+    public func product(for id: String) -> Product? {
+        products.first(where: { $0.id == id })
+    }
+    
+    // MARK: - Purchasing
+    
+    public enum PurchaseOutcome: Sendable, Equatable {
+        case success
+        case cancelled
+        case pending
+    }
+    
+    /// Purchases a product by ID (nice for UI call sites).
+    public func purchase(productID: String) async throws -> PurchaseOutcome {
+        guard let product = product(for: productID) else {
+            throw FlexStoreError(
+                title: "Not Available",
+                message: "This product isn't loaded yet."
+            )
+        }
+        return try await purchase(product)
+    }
+    
     @discardableResult
-    public func purchase(_ product: Product) async throws -> Product.PurchaseResult {
+    public func purchase(_ product: Product) async throws -> PurchaseOutcome {
         let result = try await product.purchase()
         
         switch result {
@@ -111,103 +138,128 @@ public final class StoreKitService<Tier: SubscriptionTier> {
                 let transaction = try checkVerified(verification)
                 await process(transaction: transaction)
                 await transaction.finish()
-            case .userCancelled, .pending:
-                break
+                return .success
+                
+            case .userCancelled:
+                return .cancelled
+                
+            case .pending:
+                return .pending
+                
             @unknown default:
-                break
+                return .pending
         }
-        return result
     }
     
     public func restorePurchases() async {
         isLoading = true
         defer { isLoading = false }
-        try? await AppStore.sync()
+        
+        do {
+            try await AppStore.sync()
+        } catch {
+            logger.error("AppStore.sync failed: \(error.localizedDescription)")
+        }
+        
         await updateNonConsumables()
+        
         if let groupID = configuredGroupID {
             await refreshSubscriptionStatus(groupID: groupID)
         }
     }
     
+    // MARK: - Subscription Status
+    
     public func refreshSubscriptionStatus(groupID: String) async {
         configuredGroupID = groupID
+        
         do {
             let statuses = try await Product.SubscriptionInfo.status(for: groupID)
             
-            // 1. Update Tier
             let newTier = calculateTier(from: statuses)
-            if newTier != subscriptionTier {
-                subscriptionTier = newTier
+            if newTier != subscriptionTier { subscriptionTier = newTier }
+            
+            if let effective = findEffectiveStatus(from: statuses),
+               case .verified(let transaction) = effective.transaction,
+               case .verified(let renewalInfo) = effective.renewalInfo {
+                
+                renewalDate = transaction.expirationDate
+                willAutoRenew = renewalInfo.willAutoRenew
+                autoRenewPreferenceID = renewalInfo.autoRenewPreference
+                currentSubscriptionProduct = products.first(where: { $0.id == transaction.productID })
+                
+                // Treat these states as "still active-ish" for messaging.
+                isBillingRetry = (effective.state == .inBillingRetryPeriod)
+                isFreeTrial = (transaction.offerType == .introductory)
+                
+            } else {
+                renewalDate = nil
+                willAutoRenew = false
+                autoRenewPreferenceID = nil
+                currentSubscriptionProduct = nil
+                isBillingRetry = false
+                isFreeTrial = false
             }
             
-            // 2. Update Details
-            if let effectiveStatus = findEffectiveStatus(from: statuses),
-               case .verified(let transaction) = effectiveStatus.transaction,
-               case .verified(let renewalInfo) = effectiveStatus.renewalInfo {
-                
-                self.renewalDate = transaction.expirationDate
-                self.willAutoRenew = renewalInfo.willAutoRenew
-                self.autoRenewPreferenceID = renewalInfo.autoRenewPreference
-                self.currentSubscriptionProduct = products.first(where: { $0.id == transaction.productID })
-                
-                self.isBillingRetry = effectiveStatus.state == .inBillingRetryPeriod
-                self.isGracePeriod = effectiveStatus.state == .inGracePeriod
-                self.isFreeTrial = transaction.offerType == .introductory
-            } else {
-                self.renewalDate = nil
-                self.willAutoRenew = false
-                self.autoRenewPreferenceID = nil
-                self.currentSubscriptionProduct = nil
-                self.isBillingRetry = false
-                self.isGracePeriod = false
-                self.isFreeTrial = false
-            }
         } catch {
-            logger.error("Failed to fetch status: \(error.localizedDescription)")
+            logger.error("Failed to fetch subscription status: \(error.localizedDescription)")
         }
     }
     
-    // MARK: - Internal Processing
-    private func startObserving() {
-        transactionTask = Task { [weak self] in
+    // MARK: - Observing Transactions
+    
+    private func startObservingTransactions() {
+        // Updates stream (new transactions)
+        observingTasks.append(Task { [weak self] in
+            guard let self else { return }
             for await update in Transaction.updates {
-                guard let self else { return }
+                if Task.isCancelled { return }
                 if let transaction = try? self.checkVerified(update) {
                     await self.process(transaction: transaction)
                     await transaction.finish()
                 }
             }
-        }
+        })
         
-        Task { [weak self] in
-            // Handle unfinished on launch
-            for await transaction in Transaction.unfinished {
-                guard let self else { return }
-                if let t = try? self.checkVerified(transaction) {
-                    await self.process(transaction: t)
-                    await t.finish()
+        // Finish unfinished transactions
+        observingTasks.append(Task { [weak self] in
+            guard let self else { return }
+            for await unfinished in Transaction.unfinished {
+                if Task.isCancelled { return }
+                if let transaction = try? self.checkVerified(unfinished) {
+                    await self.process(transaction: transaction)
+                    await transaction.finish()
                 }
             }
-        }
+        })
         
-        Task { [weak self] in await self?.updateNonConsumables() }
+        // Initial entitlement refresh
+        observingTasks.append(Task { [weak self] in
+            await self?.updateNonConsumables()
+        })
     }
     
+    // MARK: - Processing
+    
     private func process(transaction: Transaction) async {
-        logger.info("Processing transaction: \(transaction.productID)")
+        logger.info("Processing transaction: \(transaction.productID, privacy: .public)")
+        
         switch transaction.productType {
             case .consumable:
                 onConsumablePurchased?(transaction.productID)
+                
             case .nonConsumable, .nonRenewable:
                 if transaction.revocationDate == nil {
                     purchasedNonConsumables.insert(transaction.productID)
                 } else {
                     purchasedNonConsumables.remove(transaction.productID)
                 }
+                
             case .autoRenewable:
                 if let groupID = configuredGroupID {
                     await refreshSubscriptionStatus(groupID: groupID)
                 }
+                
             default:
                 break
         }
@@ -215,39 +267,59 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     
     private func updateNonConsumables() async {
         var active: Set<String> = []
-        for await result in Transaction.currentEntitlements {
-            if let t = try? checkVerified(result), t.productType == .nonConsumable {
+        
+        for await entitlement in Transaction.currentEntitlements {
+            if let t = try? checkVerified(entitlement), t.productType == .nonConsumable {
                 active.insert(t.productID)
             }
         }
+        
         purchasedNonConsumables = active
     }
     
     // MARK: - Tier Calculation
+    
     private func findEffectiveStatus(from statuses: [Product.SubscriptionInfo.Status]) -> Product.SubscriptionInfo.Status? {
-        return statuses
-            .filter { $0.state == .subscribed || $0.state == .inGracePeriod }
-            .max { lhs, rhs in
-                let lhsTier = tier(for: lhs)
-                let rhsTier = tier(for: rhs)
-                return lhsTier < rhsTier
-            }
+        statuses.max { tier(for: $0) < tier(for: $1) }
     }
     
     private func calculateTier(from statuses: [Product.SubscriptionInfo.Status]) -> Tier {
-        guard let effectiveStatus = findEffectiveStatus(from: statuses) else { return .defaultTier }
-        return tier(for: effectiveStatus)
+        guard let effective = findEffectiveStatus(from: statuses) else { return .defaultTier }
+        return tier(for: effective)
     }
     
     private func tier(for status: Product.SubscriptionInfo.Status) -> Tier {
+        // Consider these "still active" for gating
+        let activeStates: Set<Product.SubscriptionInfo.RenewalState> = [
+            .subscribed,
+            .inGracePeriod,
+            .inBillingRetryPeriod
+        ]
+        
+        guard activeStates.contains(status.state) else { return .defaultTier }
         guard case .verified(let transaction) = status.transaction else { return .defaultTier }
-        return Tier(productID: transaction.productID) ?? .defaultTier
+        
+        // Prefer mapping by productID (best for clarity)
+        if let t = Tier(productID: transaction.productID) { return t }
+        
+        // Fallback: map via group level
+        if let product = products.first(where: { $0.id == transaction.productID }),
+           let groupLevel = product.subscription?.groupLevel,
+           let t = Tier(levelOfService: groupLevel) {
+            return t
+        }
+        
+        return .defaultTier
     }
+    
+    // MARK: - Verification
     
     private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
         switch result {
-            case .unverified(_, let error): throw error
-            case .verified(let safe): return safe
+            case .unverified(_, let error):
+                throw error
+            case .verified(let safe):
+                return safe
         }
     }
 }

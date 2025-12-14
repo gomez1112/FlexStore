@@ -7,50 +7,98 @@
 
 import SwiftUI
 
-public struct NonConsumablePurchaseButton<Tier: SubscriptionTier>: View {
+public struct NonConsumablePurchaseButton<Tier: SubscriptionTier, Label: View>: View {
     @Environment(StoreKitService<Tier>.self) private var store
     
     private let productID: String
-    private let label: String
-    @State private var isPurchasing = false
-    @State private var errorMessage: String?
+    private let label: (PurchaseState) -> Label
     
-    public init(productID: String, label: String = "Purchase") {
+    @State private var state: PurchaseState = .idle
+    @State private var alert: FlexStoreError?
+    
+    public enum PurchaseState: Equatable, Sendable {
+        case idle
+        case purchasing
+        case purchased
+    }
+    
+    public init(
+        productID: String,
+        @ViewBuilder label: @escaping (PurchaseState) -> Label
+    ) {
         self.productID = productID
         self.label = label
     }
     
     public var body: some View {
+        let alreadyOwned = store.purchasedNonConsumables.contains(productID)
+        
         Button {
-            Task {
-                isPurchasing = true
-                defer { isPurchasing = false }
+            Task { @MainActor in
+                guard state != .purchasing else { return }
                 
-                guard let product = store.products.first(where: { $0.id == productID }) else {
-                    errorMessage = "Product not found."
+                if alreadyOwned {
+                    state = .purchased
                     return
                 }
                 
+                state = .purchasing
+                defer {
+                    if store.purchasedNonConsumables.contains(productID) {
+                        state = .purchased
+                    } else if state == .purchasing {
+                        state = .idle
+                    }
+                }
+                
                 do {
-                    _ = try await store.purchase(product)
-                } catch is CancellationError {
-                    // User cancelled; do nothing.
+                    let outcome = try await store.purchase(productID: productID)
+                    switch outcome {
+                        case .success:
+                            // StoreKitService processes + finishes transactions.
+                            break
+                        case .cancelled:
+                            alert = FlexStoreError(title: "Cancelled", message: "Purchase was cancelled.")
+                        case .pending:
+                            alert = FlexStoreError(title: "Pending", message: "Purchase is pending approval.")
+                    }
+                } catch let e as FlexStoreError {
+                    alert = e
                 } catch {
-                    errorMessage = error.localizedDescription
+                    alert = FlexStoreError(title: "Purchase Error", message: error.localizedDescription)
                 }
             }
         } label: {
-            if isPurchasing {
-                ProgressView()
-            } else {
-                Text(label)
-            }
+            label(alreadyOwned ? .purchased : state)
         }
-        .disabled(isPurchasing)
-        .alert("Purchase Error", isPresented: .constant(errorMessage != nil), actions: {
-            Button("OK") { errorMessage = nil }
-        }, message: {
-            Text(errorMessage ?? "Unknown error")
-        })
+        .disabled(state == .purchasing || alreadyOwned)
+        .alert(item: $alert) { err in
+            Alert(
+                title: Text(err.title),
+                message: Text(err.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+    }
+}
+
+// MARK: - Convenience init
+
+public extension NonConsumablePurchaseButton where Label == AnyView {
+    init(productID: String, title: LocalizedStringKey = "Purchase") {
+        self.init(productID: productID) { state in
+            AnyView(
+                Group {
+                    switch state {
+                        case .purchasing:
+                            ProgressView()
+                        case .purchased:
+                            Text("Purchased")
+                        case .idle:
+                            Text(title)
+                    }
+                }
+            )
+        }
     }
 }

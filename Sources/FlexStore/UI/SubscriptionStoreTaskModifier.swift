@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct SubscriptionStoreTaskModifier<Tier: SubscriptionTier>: ViewModifier {
+private struct StoreKitAttachModifier<Tier: SubscriptionTier>: ViewModifier {
     let manager: StoreKitService<Tier>
     let groupID: String?
     let productIDs: Set<String>
@@ -16,44 +16,36 @@ struct SubscriptionStoreTaskModifier<Tier: SubscriptionTier>: ViewModifier {
     
     func body(content: Content) -> some View {
         content
-        // Inject Manager for @Environment usage
             .environment(manager)
-            .task {
-                // 1. Load Products
+            .task(id: productIDs) {
                 if !productIDs.isEmpty {
                     await manager.loadProducts(productIDs)
                 }
-                // 2. Update Status (Configures Group ID internally)
+            }
+            .task(id: groupID) {
+                // Configure group ID + refresh when it changes
                 if let groupID {
                     await manager.refreshSubscriptionStatus(groupID: groupID)
                 }
             }
-        // Re-check if products update (rare)
-            .onChange(of: manager.products) { _, _ in
-                if let groupID {
-                    Task { await manager.refreshSubscriptionStatus(groupID: groupID) }
-                }
+            .task {
+                // Ensure non-consumables are hydrated on first appearance
+                await manager.configure(productIDs: [], subscriptionGroupID: nil)
             }
-        // Re-check on foreground
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active, let groupID {
-                    Task { await manager.refreshSubscriptionStatus(groupID: groupID) }
-                }
+                guard phase == .active, let groupID else { return }
+                Task { await manager.refreshSubscriptionStatus(groupID: groupID) }
             }
     }
 }
 
 public extension View {
-    /// Attach the StoreKitManager to the view hierarchy.
-    /// - Parameters:
-    ///   - manager: Your `@State` manager instance.
-    ///   - groupID: The Subscription Group ID (optional, nil if only using consumables).
-    ///   - ids: All product IDs to load.
+    /// Attaches a `StoreKitService` to the environment and performs initial loading.
     func attachStoreKit<Tier: SubscriptionTier>(
         manager: StoreKitService<Tier>,
-        groupID: String?,
-        ids: Set<String>
+        groupID: String? = nil,
+        ids: Set<String> = []
     ) -> some View {
-        modifier(SubscriptionStoreTaskModifier(manager: manager, groupID: groupID, productIDs: ids))
+        modifier(StoreKitAttachModifier(manager: manager, groupID: groupID, productIDs: ids))
     }
 }

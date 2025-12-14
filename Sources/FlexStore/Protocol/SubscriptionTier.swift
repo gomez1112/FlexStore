@@ -7,17 +7,26 @@
 
 import Foundation
 
+/// App-defined access tiers (free/pro, bronze/silver/gold, etc).
+///
+/// You can map from:
+/// - StoreKit subscription group "level of service" (preferred)
+/// - product identifier (fallback)
 public protocol SubscriptionTier: Comparable, Hashable, CaseIterable, Sendable {
-    /// The default state (e.g. .free, .guest).
     static var defaultTier: Self { get }
     
-    /// Initialize from a product identifier.
-    /// This MUST be able to resolve purely from the string, without network calls.
+    /// Map from App Store Connect subscription group "level of service".
+    init?(levelOfService: Int)
+    
+    /// Fallback map from product identifier.
     init?(productID: String)
 }
 
-public extension SubscriptionTier where Self: RawRepresentable, Self.RawValue: Comparable {
+/// Default ordering uses `allCases` order.
+/// If you want a different ordering, implement `<` in your Tier type.
+public extension SubscriptionTier {
     static func < (lhs: Self, rhs: Self) -> Bool {
-        lhs.rawValue < rhs.rawValue
+        let all = Array(Self.allCases)
+        return (all.firstIndex(of: lhs) ?? 0) < (all.firstIndex(of: rhs) ?? 0)
     }
 }
