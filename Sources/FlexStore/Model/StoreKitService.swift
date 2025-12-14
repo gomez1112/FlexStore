@@ -60,7 +60,11 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     // MARK: - Hooks
     
     @ObservationIgnored
-    public var onConsumablePurchased: ((String) -> Void)?
+    public var onConsumablePurchased: (@MainActor @Sendable (String) -> Void)?
+    
+    @ObservationIgnored
+    public var onEconomyError: (@MainActor @Sendable (Error) -> Void)?
+
     
     // MARK: - Private
     
@@ -134,7 +138,10 @@ public final class StoreKitService<Tier: SubscriptionTier> {
         let result = try await product.purchase()
         
         switch result {
-            case .success(_):
+            case .success(let verification):
+                let transaction = try checkVerified(verification)
+                await process(transaction: transaction)
+                await transaction.finish()
                 return .success
                 
             case .userCancelled:
