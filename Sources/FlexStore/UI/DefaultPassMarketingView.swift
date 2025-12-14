@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-/// A pre-styled Marketing Hero View.
+
 public struct DefaultPassMarketingView: View {
     public let title: LocalizedStringKey
     public let subtitle: LocalizedStringKey?

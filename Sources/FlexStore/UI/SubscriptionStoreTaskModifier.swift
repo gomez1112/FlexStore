@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import StoreKit
 
 struct SubscriptionStoreTaskModifier<Tier: SubscriptionTier>: ViewModifier {
     let manager: StoreKitService<Tier>
@@ -20,16 +19,20 @@ struct SubscriptionStoreTaskModifier<Tier: SubscriptionTier>: ViewModifier {
         // Inject Manager for @Environment usage
             .environment(manager)
             .task {
+                // 1. Load Products
                 if !productIDs.isEmpty {
                     await manager.loadProducts(productIDs)
                 }
+                // 2. Update Status (Configures Group ID internally)
                 if let groupID {
                     await manager.refreshSubscriptionStatus(groupID: groupID)
                 }
             }
         // Re-check if products update (rare)
             .onChange(of: manager.products) { _, _ in
-                if let groupID { Task { await manager.refreshSubscriptionStatus(groupID: groupID) } }
+                if let groupID {
+                    Task { await manager.refreshSubscriptionStatus(groupID: groupID) }
+                }
             }
         // Re-check on foreground
             .onChange(of: scenePhase) { _, phase in

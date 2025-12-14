@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-/// Soft Gate: Blurs content and shows an overlay if `requiredTier` is not met.
+/// Soft gate: blurs content + shows overlay if `requiredTier` is not met.
 public struct BlurredTierGate<Tier: SubscriptionTier, Content: View>: View {
     @Environment(StoreKitService<Tier>.self) private var store
     
@@ -35,39 +35,45 @@ public struct BlurredTierGate<Tier: SubscriptionTier, Content: View>: View {
     }
     
     public var body: some View {
-        let isUnlocked = store.subscriptionTier >= requiredTier
+        let unlocked = store.subscriptionTier >= requiredTier
         
         ZStack {
             content()
-                .blur(radius: isUnlocked ? 0 : 8)
-                .allowsHitTesting(isUnlocked)
+                .blur(radius: unlocked ? 0 : 8)
+                .allowsHitTesting(unlocked)
             
-            if !isUnlocked {
-                VStack(spacing: 12) {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.secondary)
-                    
-                    Text(title)
-                        .font(.headline)
-                    
-                    Text(message)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                    
-                    Button(action: onUpgrade) {
-                        Text(buttonTitle)
-                            .padding(.horizontal, 16)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                }
-                .padding(20)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                .shadow(radius: 10)
-                .padding()
+            if !unlocked {
+                overlay
+                    .transition(.opacity)
             }
         }
+        .animation(.snappy, value: unlocked)
+    }
+    
+    private var overlay: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 32))
+                .foregroundStyle(.secondary)
+            
+            Text(title)
+                .font(.headline)
+            
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            
+            Button(action: onUpgrade) {
+                Text(buttonTitle)
+                    .padding(.horizontal, 16)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(20)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(radius: 10)
+        .padding()
     }
 }

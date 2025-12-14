@@ -23,21 +23,21 @@ public struct NonConsumablePurchaseButton<Tier: SubscriptionTier>: View {
     public var body: some View {
         Button {
             Task {
-                await MainActor.run { isPurchasing = true }
-                if let product = store.products.first(where: { $0.id == productID }) {
-                    do {
-                        let result = try await store.purchase(product)
-                        // Handle specific result cases if needed
-                        // If your StoreKitService exposes a cancellable outcome, you could set a friendly message.
-                        // For now, we do nothing on success.
-                        _ = result
-                    } catch is CancellationError {
-                        await MainActor.run { errorMessage = "Purchase was cancelled." }
-                    } catch {
-                        await MainActor.run { errorMessage = error.localizedDescription }
-                    }
+                isPurchasing = true
+                defer { isPurchasing = false }
+                
+                guard let product = store.products.first(where: { $0.id == productID }) else {
+                    errorMessage = "Product not found."
+                    return
                 }
-                await MainActor.run { isPurchasing = false }
+                
+                do {
+                    _ = try await store.purchase(product)
+                } catch is CancellationError {
+                    // User cancelled; do nothing.
+                } catch {
+                    errorMessage = error.localizedDescription
+                }
             }
         } label: {
             if isPurchasing {

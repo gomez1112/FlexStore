@@ -7,26 +7,40 @@
 
 import SwiftUI
 
-public struct RestorePurchasesButton<Tier: SubscriptionTier>: View {
+public struct RestorePurchasesButton<Tier: SubscriptionTier, Label: View>: View {
     @Environment(StoreKitService<Tier>.self) private var store
     @State private var isRestoring = false
     
-    public init() {}
+    private let label: (Bool) -> Label
+    
+    public init(@ViewBuilder label: @escaping (Bool) -> Label) {
+        self.label = label
+    }
     
     public var body: some View {
         Button {
-            isRestoring = true
-            Task {
+            Task { @MainActor in
+                guard !isRestoring else { return }
+                isRestoring = true
+                defer { isRestoring = false }
                 await store.restorePurchases()
-                isRestoring = false
             }
         } label: {
-            if isRestoring {
-                ProgressView()
-            } else {
-                Text("Restore Purchases")
-            }
+            label(isRestoring)
         }
         .disabled(isRestoring)
+    }
+}
+
+public extension RestorePurchasesButton where Label == AnyView {
+    init(title: LocalizedStringKey = "Restore Purchases") {
+        self.init { isRestoring in
+            AnyView(
+                Group {
+                    if isRestoring { ProgressView() }
+                    else { Text(title) }
+                }
+            )
+        }
     }
 }

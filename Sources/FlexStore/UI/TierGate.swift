@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-/// Hard Gate: Unlocks content only if `requiredTier` is met.
+/// Hard gate: renders `unlocked` only if `requiredTier` is met.
 public struct TierGate<Tier: SubscriptionTier, Unlocked: View, Locked: View>: View {
     @Environment(StoreKitService<Tier>.self) private var store
     
