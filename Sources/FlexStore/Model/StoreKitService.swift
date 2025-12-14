@@ -134,7 +134,7 @@ public final class StoreKitService<Tier: SubscriptionTier> {
         let result = try await product.purchase()
         
         switch result {
-            case .success(let verification):
+            case .success(_):
                 return .success
                 
             case .userCancelled:

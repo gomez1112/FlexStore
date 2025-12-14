@@ -3,7 +3,6 @@
 //  FlexStore
 //
 //  Created by Gerard Gomez on 11/27/25.
-//
 
 import SwiftUI
 
@@ -32,15 +31,37 @@ public struct RestorePurchasesButton<Tier: SubscriptionTier, Label: View>: View 
     }
 }
 
-public extension RestorePurchasesButton where Label == AnyView {
+// MARK: - Default Label (no AnyView)
+
+public extension RestorePurchasesButton where Label == FlexStoreDefaultRestoreLabel {
+    /// Nice call site:
+    /// `RestorePurchasesButton<AppTier>()`
+    /// or `RestorePurchasesButton<AppTier>(title: "Restore")`
     init(title: LocalizedStringKey = "Restore Purchases") {
         self.init { isRestoring in
-            AnyView(
-                Group {
-                    if isRestoring { ProgressView() }
-                    else { Text(title) }
-                }
-            )
+            FlexStoreDefaultRestoreLabel(isRestoring: isRestoring, title: title)
         }
     }
 }
+
+public struct FlexStoreDefaultRestoreLabel: View {
+    let isRestoring: Bool
+    let title: LocalizedStringKey
+    
+    public init(isRestoring: Bool, title: LocalizedStringKey) {
+        self.isRestoring = isRestoring
+        self.title = title
+    }
+    
+    public var body: some View {
+        if isRestoring {
+            HStack(spacing: 8) {
+                ProgressView()
+                Text("Restoring…")
+            }
+        } else {
+            Text(title)
+        }
+    }
+}
+
