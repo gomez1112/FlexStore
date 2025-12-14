@@ -135,9 +135,6 @@ public final class StoreKitService<Tier: SubscriptionTier> {
         
         switch result {
             case .success(let verification):
-                let transaction = try checkVerified(verification)
-                await process(transaction: transaction)
-                await transaction.finish()
                 return .success
                 
             case .userCancelled:
