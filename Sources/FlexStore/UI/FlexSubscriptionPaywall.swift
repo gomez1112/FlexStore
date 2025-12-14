@@ -53,9 +53,6 @@ public struct FlexSubscriptionPaywall<Tier: SubscriptionTier, Header: View, Back
     }
 
     public var body: some View {
-        ZStack {
-            background()
-
             SubscriptionStoreView(groupID: groupID, visibleRelationships: visibleRelationships) {
                 VStack(spacing: 0) {
                     header()
@@ -65,7 +62,9 @@ public struct FlexSubscriptionPaywall<Tier: SubscriptionTier, Header: View, Back
                         featuresSection
                     }
                 }
-                .containerBackground(for: .subscriptionStoreFullHeight) { Color.clear }
+                .containerBackground(for: .subscriptionStoreFullHeight) {
+                    background()
+                }
             }
             .backgroundStyle(.clear)
             .subscriptionStoreControlIcon { product, info in
@@ -89,7 +88,6 @@ public struct FlexSubscriptionPaywall<Tier: SubscriptionTier, Header: View, Back
             .subscriptionStorePickerItemBackground(pickerItemMaterial)
             .subscriptionStoreButtonLabel(useMultilineButtonLabel ? .multiline : .singleLine)
 #endif
-        }
     }
 
     private var featuresSection: some View {
