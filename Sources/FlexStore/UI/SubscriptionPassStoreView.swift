@@ -16,7 +16,14 @@ public struct SubscriptionPassStoreView<Tier: SubscriptionTier, MarketingContent
     private let visibleRelationships: Product.SubscriptionRelationship
     private let iconProvider: (Tier, Product) -> Image
     private let marketing: () -> MarketingContent
-    
+
+    /// Creates a subscription pass store view with custom marketing content and iconography.
+    ///
+    /// - Parameters:
+    ///   - groupID: Subscription group identifier to present.
+    ///   - visibleRelationships: Filters which subscription relationships are shown. Defaults to `.all`.
+    ///   - iconProvider: Closure returning an icon for the resolved tier and product.
+    ///   - marketing: View builder used to present marketing content above the picker.
     public init(
         groupID: String,
         visibleRelationships: Product.SubscriptionRelationship = .all,

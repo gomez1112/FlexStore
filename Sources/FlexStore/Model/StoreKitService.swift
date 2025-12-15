@@ -8,31 +8,55 @@ import StoreKit
 import OSLog
 import Observation
 
+/// Observable StoreKit 2 manager that fetches products, tracks entitlements, and processes purchases for your app's tiers.
 @Observable
 @MainActor
 public final class StoreKitService<Tier: SubscriptionTier> {
     
     // MARK: - Public State
     
+    /// The active entitlement tier resolved from the user's subscription or `.defaultTier` when unsubscribed.
     public private(set) var subscriptionTier: Tier = .defaultTier
+
+    /// Product identifiers for non-consumables the user owns.
     public private(set) var purchasedNonConsumables: Set<String> = []
+
+    /// StoreKit products loaded for the configured identifiers.
     public private(set) var products: [Product] = []
+
+    /// Indicates whether the service is currently performing a StoreKit operation.
     public private(set) var isLoading: Bool = false
     
     // MARK: - Subscription Details (Optional UI Helpers)
     
+    /// The renewal or expiration date for the current subscription, if any.
     public private(set) var renewalDate: Date?
+
+    /// `true` when the subscription is set to auto-renew at the end of the current period.
     public private(set) var willAutoRenew: Bool = false
+
+    /// The product identifier the subscription will renew into, if different from the current product.
     public private(set) var autoRenewPreferenceID: String?
+
+    /// The active subscription product resolved from StoreKit status.
     public private(set) var currentSubscriptionProduct: Product?
-    
+
+    /// Indicates the user is currently in a free trial period.
     public private(set) var isFreeTrial: Bool = false
+
+    /// Indicates the subscription is in a billing retry state.
     public private(set) var isBillingRetry: Bool = false
-    
+
+    /// Convenience flag that is `true` when the active tier is higher than `.defaultTier`.
     public var isSubscribed: Bool { subscriptionTier != Tier.defaultTier }
+
+    /// The identifier of the active subscription product, if available.
     public var activeProductID: String? { currentSubscriptionProduct?.id }
+
+    /// The display name of the active subscription product, or "Inactive" when no subscription is active.
     public var planName: String { currentSubscriptionProduct?.displayName ?? "Inactive" }
-    
+
+    /// The display name for the auto-renew target, if it differs from the current product.
     public var upcomingPlanName: String? {
         guard let nextID = autoRenewPreferenceID,
               let nextProduct = products.first(where: { $0.id == nextID })
@@ -40,6 +64,7 @@ public final class StoreKitService<Tier: SubscriptionTier> {
         return nextProduct.displayName
     }
     
+    /// Human-friendly description of the current renewal state for UI labels.
     public var renewalStatusString: String {
         if isBillingRetry { return "Payment Failed - Update Info" }
         guard let date = renewalDate else { return "No active subscription" }
@@ -60,9 +85,11 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     // MARK: - Hooks
     
     @ObservationIgnored
+    /// Callback invoked when a consumable transaction is verified and ready to be applied.
     public var onConsumablePurchased: (@MainActor @Sendable (String) -> Void)?
-    
+
     @ObservationIgnored
+    /// Callback invoked when applying a consumable grant to the app's economy throws.
     public var onEconomyError: (@MainActor @Sendable (Error) -> Void)?
 
     @ObservationIgnored
@@ -75,6 +102,7 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     @ObservationIgnored private var configuredGroupID: String?
     @ObservationIgnored private var observingTasks: [Task<Void, Never>] = []
     
+    /// Creates a new StoreKit service and immediately starts observing transaction streams.
     public init() {
         startObservingTransactions()
     }
@@ -85,8 +113,11 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     
     // MARK: - Configuration
     
-    /// Convenience configuration call.
-    /// Call this from a `.task` in your app (or via `View.attachStoreKit(...)`).
+    /// Configures StoreKit by loading the provided products, updating non-consumable entitlements, and refreshing subscription status when a group identifier is supplied.
+    ///
+    /// - Parameters:
+    ///   - productIDs: The set of product identifiers to load.
+    ///   - subscriptionGroupID: The subscription group identifier to query for status updates.
     public func configure(productIDs: Set<String>, subscriptionGroupID: String?) async {
         if !productIDs.isEmpty {
             await loadProducts(productIDs)
@@ -100,6 +131,9 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     
     // MARK: - Product Loading
     
+    /// Fetches StoreKit product metadata for the provided identifiers and sorts them by ascending price.
+    ///
+    /// - Parameter ids: Product identifiers to request.
     public func loadProducts(_ ids: Set<String>) async {
         isLoading = true
         defer { isLoading = false }
@@ -112,12 +146,17 @@ public final class StoreKitService<Tier: SubscriptionTier> {
         }
     }
     
+    /// Returns a previously-loaded StoreKit product for the given identifier.
+    ///
+    /// - Parameter id: The product identifier to find.
+    /// - Returns: The matching `Product` if it has been loaded.
     public func product(for id: String) -> Product? {
         products.first(where: { $0.id == id })
     }
     
     // MARK: - Purchasing
     
+    /// Result states from a purchase attempt.
     public enum PurchaseOutcome: Sendable, Equatable {
         case success
         case cancelled
@@ -135,6 +174,10 @@ public final class StoreKitService<Tier: SubscriptionTier> {
         return try await purchase(product)
     }
     
+    /// Purchases a StoreKit product that has already been loaded.
+    ///
+    /// - Parameter product: The product to purchase.
+    /// - Returns: The resulting `PurchaseOutcome` describing user intent or transaction status.
     @discardableResult
     public func purchase(_ product: Product) async throws -> PurchaseOutcome {
         let result = try await product.purchase()
@@ -157,6 +200,7 @@ public final class StoreKitService<Tier: SubscriptionTier> {
         }
     }
     
+    /// Syncs with the App Store to restore purchases and refreshes known entitlements.
     public func restorePurchases() async {
         isLoading = true
         defer { isLoading = false }
@@ -176,6 +220,9 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     
     // MARK: - Subscription Status
     
+    /// Refreshes subscription status for the supplied App Store Connect subscription group identifier.
+    ///
+    /// - Parameter groupID: The group identifier to query.
     public func refreshSubscriptionStatus(groupID: String) async {
         configuredGroupID = groupID
         

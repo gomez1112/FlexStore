@@ -8,6 +8,7 @@ import SwiftUI
 
 // MARK: - State
 
+/// Purchase state for non-consumable products.
 public enum FlexStoreNonConsumablePurchaseState: Equatable, Sendable {
     case idle
     case purchasing
@@ -16,11 +17,18 @@ public enum FlexStoreNonConsumablePurchaseState: Equatable, Sendable {
 
 // MARK: - Default Label
 
+/// Default label used by ``NonConsumablePurchaseButton``.
 public struct FlexStoreDefaultNonConsumableLabel: View {
     let state: FlexStoreNonConsumablePurchaseState
     let title: LocalizedStringKey
     let purchasedTitle: LocalizedStringKey
-    
+
+    /// Creates the default non-consumable label.
+    ///
+    /// - Parameters:
+    ///   - state: Current purchase state.
+    ///   - title: Title to display before purchase.
+    ///   - purchasedTitle: Title to display after the purchase is owned.
     public init(
         state: FlexStoreNonConsumablePurchaseState,
         title: LocalizedStringKey,
@@ -48,11 +56,18 @@ public struct FlexStoreDefaultNonConsumableLabel: View {
 
 // MARK: - Public Button (clean call site)
 
+/// Button that purchases a non-consumable product and reflects the purchase state.
 public struct NonConsumablePurchaseButton<Tier: SubscriptionTier>: View {
     private let productID: String
     private let title: LocalizedStringKey
     private let purchasedTitle: LocalizedStringKey
-    
+
+    /// Creates a non-consumable purchase button.
+    ///
+    /// - Parameters:
+    ///   - productID: The identifier of the non-consumable product to buy.
+    ///   - title: Title shown before purchase. Defaults to "Purchase".
+    ///   - purchasedTitle: Title shown when the item is already owned. Defaults to "Purchased".
     public init(
         productID: String,
         title: LocalizedStringKey = "Purchase",
@@ -75,6 +90,10 @@ public struct NonConsumablePurchaseButton<Tier: SubscriptionTier>: View {
 // MARK: - Custom Label API
 
 public extension NonConsumablePurchaseButton {
+    /// Supplies a custom label that reacts to purchase state changes.
+    ///
+    /// - Parameter builder: Builder closure receiving the current purchase state.
+    /// - Returns: A view that wraps the button with a custom label.
     func label<Label: View>(
         @ViewBuilder _ builder: @escaping (FlexStoreNonConsumablePurchaseState) -> Label
     ) -> some View {

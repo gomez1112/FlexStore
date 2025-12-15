@@ -8,6 +8,7 @@ import SwiftUI
 
 // MARK: - State
 
+/// Purchase state for consumable transactions.
 public enum FlexStoreConsumablePurchaseState: Equatable, Sendable {
     case idle
     case purchasing
@@ -16,11 +17,18 @@ public enum FlexStoreConsumablePurchaseState: Equatable, Sendable {
 
 // MARK: - Default Label
 
+/// Default label used by ``ConsumablePurchaseButton``.
 public struct FlexStoreDefaultConsumableLabel: View {
     let state: FlexStoreConsumablePurchaseState
     let title: LocalizedStringKey
     let successTitle: LocalizedStringKey
-    
+
+    /// Creates the default consumable label.
+    ///
+    /// - Parameters:
+    ///   - state: Current purchase state.
+    ///   - title: Title shown before purchase.
+    ///   - successTitle: Title shown when the purchase succeeds.
     public init(
         state: FlexStoreConsumablePurchaseState,
         title: LocalizedStringKey,
@@ -48,12 +56,20 @@ public struct FlexStoreDefaultConsumableLabel: View {
 
 // MARK: - Public Button (clean call site)
 
+/// Button that purchases a consumable product and briefly shows success state.
 public struct ConsumablePurchaseButton<Tier: SubscriptionTier>: View {
     private let productID: String
     private let title: LocalizedStringKey
     private let successTitle: LocalizedStringKey
     private let resetAfter: Duration?
-    
+
+    /// Creates a consumable purchase button.
+    ///
+    /// - Parameters:
+    ///   - productID: Identifier of the consumable product.
+    ///   - title: Title shown while idle. Defaults to "Buy".
+    ///   - successTitle: Title shown after a successful purchase. Defaults to "Added".
+    ///   - resetAfter: Duration after which the success state resets to idle. Pass `nil` to keep the success state.
     public init(
         productID: String,
         title: LocalizedStringKey = "Buy",
@@ -79,6 +95,10 @@ public struct ConsumablePurchaseButton<Tier: SubscriptionTier>: View {
 // MARK: - Custom Label API (no extra generics at call site)
 
 public extension ConsumablePurchaseButton {
+    /// Supplies a custom label that reacts to consumable purchase state changes.
+    ///
+    /// - Parameter builder: Builder closure receiving the current purchase state.
+    /// - Returns: A view wrapping the button with a custom label.
     func label<Label: View>(
         @ViewBuilder _ builder: @escaping (FlexStoreConsumablePurchaseState) -> Label
     ) -> some View {

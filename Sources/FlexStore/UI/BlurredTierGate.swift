@@ -17,7 +17,16 @@ public struct BlurredTierGate<Tier: SubscriptionTier, Content: View>: View {
     private let buttonTitle: LocalizedStringKey
     private let onUpgrade: () -> Void
     private let content: () -> Content
-    
+
+    /// Creates a blurred gate overlay.
+    ///
+    /// - Parameters:
+    ///   - requiredTier: Minimum tier required to remove the blur and unlock content.
+    ///   - title: Overlay title. Defaults to "Premium Feature".
+    ///   - message: Supporting copy shown beneath the title.
+    ///   - buttonTitle: Title for the upgrade button.
+    ///   - onUpgrade: Action executed when the upgrade button is tapped.
+    ///   - content: Underlying content to present.
     public init(
         requiredTier: Tier,
         title: LocalizedStringKey = "Premium Feature",

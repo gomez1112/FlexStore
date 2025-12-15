@@ -9,6 +9,7 @@
 import SwiftUI
 import StoreKit
 
+/// Fully-customizable paywall built on top of `SubscriptionStoreView`.
 public struct FlexSubscriptionPaywall<Tier: SubscriptionTier, Header: View, Background: View, FeatureRow: View>: View {
     private let groupID: String
     private let visibleRelationships: Product.SubscriptionRelationship
@@ -26,6 +27,20 @@ public struct FlexSubscriptionPaywall<Tier: SubscriptionTier, Header: View, Back
     private let iconProvider: (Tier, Product) -> Image
     private let onPurchaseCompletion: (@MainActor (Product) -> Void)?
 
+    /// Creates a subscription paywall with custom header, background, and feature rows.
+    ///
+    /// - Parameters:
+    ///   - groupID: Subscription group identifier to present.
+    ///   - visibleRelationships: Filters which subscription relationships appear. Defaults to `.all`.
+    ///   - sectionTitle: Title shown above the features section. Defaults to "What's Included".
+    ///   - features: Feature list rendered using `featureRow`.
+    ///   - pickerItemMaterial: Background material for picker rows on supported platforms.
+    ///   - useMultilineButtonLabel: Determines whether purchase buttons wrap text onto multiple lines.
+    ///   - iconProvider: Closure returning an image for each tier/product combination.
+    ///   - onPurchaseCompletion: Optional callback invoked when a purchase succeeds.
+    ///   - background: Background view behind the store content.
+    ///   - header: Header view displayed above the product picker.
+    ///   - featureRow: View builder for each feature in ``FlexPaywallFeature``.
     public init(
         groupID: String,
         visibleRelationships: Product.SubscriptionRelationship = .all,
