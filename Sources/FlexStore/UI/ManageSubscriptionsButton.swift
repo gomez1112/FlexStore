@@ -69,40 +69,23 @@ public extension ManageSubscriptionsButton {
 private struct _ManageSubscriptionsButtonImpl<Label: View>: View {
     @State private var isOpening = false
     @State private var alert: FlexStoreError?
+    @State private var showingManageSubscriptions = false
 
     let label: (Bool) -> Label
 
     var body: some View {
         Button {
-            Task { @MainActor in
-                await openManageSubscriptions()
-            }
+            showingManageSubscriptions = true
         } label: {
             label(isOpening)
         }
         .disabled(isOpening)
+        .manageSubscriptionsSheet(isPresented: $showingManageSubscriptions)
         .alert(item: $alert) { error in
             Alert(
                 title: Text(error.title),
                 message: Text(error.message),
                 dismissButton: .default(Text("OK"))
-            )
-        }
-    }
-
-    @MainActor
-    private func openManageSubscriptions() async {
-        guard !isOpening else { return }
-
-        isOpening = true
-        defer { isOpening = false }
-
-        do {
-            try await AppStore.showManageSubscriptions()
-        } catch {
-            alert = FlexStoreError(
-                title: "Unable to Open",
-                message: error.localizedDescription
             )
         }
     }
