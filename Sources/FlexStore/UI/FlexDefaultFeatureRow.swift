@@ -8,9 +8,13 @@
 
 import SwiftUI
 
+/// Default feature row used by ``FlexSubscriptionPaywall``.
 public struct FlexDefaultFeatureRow: View {
     private let feature: FlexPaywallFeature
 
+    /// Creates a default feature row for the provided paywall feature.
+    ///
+    /// - Parameter feature: The feature to render.
     public init(_ feature: FlexPaywallFeature) {
         self.feature = feature
     }

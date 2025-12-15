@@ -7,13 +7,27 @@
 
 import SwiftUI
 
-
+/// Default marketing layout used by ``SubscriptionPassStoreView`` when you want a simple hero with feature bullets.
 public struct DefaultPassMarketingView: View {
+    /// Primary headline text.
     public let title: LocalizedStringKey
+
+    /// Optional supporting subtitle text.
     public let subtitle: LocalizedStringKey?
+
+    /// List of localized feature highlights.
     public let features: [LocalizedStringKey]
+
+    /// Optional badge-style highlight shown beneath the features.
     public let highlight: LocalizedStringKey?
-    
+
+    /// Creates a default marketing view.
+    ///
+    /// - Parameters:
+    ///   - title: Main headline for the hero section.
+    ///   - subtitle: Optional supporting copy.
+    ///   - features: Localized bullet list.
+    ///   - highlight: Optional capsule highlight.
     public init(
         title: LocalizedStringKey,
         subtitle: LocalizedStringKey? = nil,

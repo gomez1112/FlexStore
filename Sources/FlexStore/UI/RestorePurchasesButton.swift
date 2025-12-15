@@ -8,10 +8,16 @@ import SwiftUI
 
 // MARK: - Default Label
 
+/// Default label used by ``RestorePurchasesButton``.
 public struct FlexStoreDefaultRestoreLabel: View {
     let isRestoring: Bool
     let title: LocalizedStringKey
-    
+
+    /// Creates the default restore purchases label.
+    ///
+    /// - Parameters:
+    ///   - isRestoring: Indicates whether restoration is in progress.
+    ///   - title: Title shown while idle.
     public init(isRestoring: Bool, title: LocalizedStringKey) {
         self.isRestoring = isRestoring
         self.title = title
@@ -31,9 +37,13 @@ public struct FlexStoreDefaultRestoreLabel: View {
 
 // MARK: - Public Button (clean call site)
 
+/// Button that triggers `StoreKitService.restorePurchases()` and reflects progress.
 public struct RestorePurchasesButton<Tier: SubscriptionTier>: View {
     private let title: LocalizedStringKey
-    
+
+    /// Creates a restore purchases button.
+    ///
+    /// - Parameter title: Title displayed while idle. Defaults to "Restore Purchases".
     public init(title: LocalizedStringKey = "Restore Purchases") {
         self.title = title
     }
@@ -48,6 +58,10 @@ public struct RestorePurchasesButton<Tier: SubscriptionTier>: View {
 // MARK: - Custom Label API
 
 public extension RestorePurchasesButton {
+    /// Supplies a custom label that reacts to restoration progress.
+    ///
+    /// - Parameter builder: Builder closure receiving `true` when restoration is in progress.
+    /// - Returns: A view wrapping the button with a custom label.
     func label<Label: View>(
         @ViewBuilder _ builder: @escaping (Bool) -> Label
     ) -> some View {

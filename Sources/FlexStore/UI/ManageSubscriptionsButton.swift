@@ -8,11 +8,18 @@
 import SwiftUI
 import StoreKit
 
+/// Default label used by ``ManageSubscriptionsButton``.
 public struct FlexStoreDefaultManageSubscriptionsLabel: View {
     let isOpening: Bool
     let title: LocalizedStringKey
     let systemImage: String
 
+    /// Creates the default manage subscriptions label.
+    ///
+    /// - Parameters:
+    ///   - isOpening: Indicates the App Store sheet is being requested.
+    ///   - title: Title to display inside the label.
+    ///   - systemImage: Symbol to display with the title.
     public init(
         isOpening: Bool,
         title: LocalizedStringKey,
@@ -35,10 +42,16 @@ public struct FlexStoreDefaultManageSubscriptionsLabel: View {
     }
 }
 
+/// Button that opens the system manage-subscriptions sheet.
 public struct ManageSubscriptionsButton: View {
     private let title: LocalizedStringKey
     private let systemImage: String
 
+    /// Creates a manage subscriptions button.
+    ///
+    /// - Parameters:
+    ///   - title: Title displayed in the label. Defaults to "Manage Subscriptions".
+    ///   - systemImage: Symbol displayed next to the title. Defaults to `"gear"`.
     public init(
         title: LocalizedStringKey = "Manage Subscriptions",
         systemImage: String = "gear"
@@ -59,6 +72,10 @@ public struct ManageSubscriptionsButton: View {
 }
 
 public extension ManageSubscriptionsButton {
+    /// Supplies a custom label that reflects whether the App Store sheet is opening.
+    ///
+    /// - Parameter builder: Builder closure receiving `true` while the sheet request is in progress.
+    /// - Returns: A view wrapping the button with a custom label.
     func label<Label: View>(
         @ViewBuilder _ builder: @escaping (Bool) -> Label
     ) -> some View {
