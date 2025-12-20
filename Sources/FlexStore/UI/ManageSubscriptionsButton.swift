@@ -99,7 +99,7 @@ private struct _ManageSubscriptionsButtonImpl<Label: View>: View {
             #else
             isOpening = true
             if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
-                _ = openURL(url)
+                openURL(url)
             }
             isOpening = false
             #endif
