@@ -84,6 +84,8 @@ public extension ManageSubscriptionsButton {
 }
 
 private struct _ManageSubscriptionsButtonImpl<Label: View>: View {
+    @Environment(\.openURL) private var openURL
+
     @State private var isOpening = false
     @State private var alert: FlexStoreError?
     @State private var showingManageSubscriptions = false
@@ -92,12 +94,20 @@ private struct _ManageSubscriptionsButtonImpl<Label: View>: View {
 
     var body: some View {
         Button {
+            #if os(iOS) || os(visionOS)
             showingManageSubscriptions = true
+            #else
+            isOpening = true
+            if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
+                _ = openURL(url)
+            }
+            isOpening = false
+            #endif
         } label: {
             label(isOpening)
         }
         .disabled(isOpening)
-        .manageSubscriptionsSheet(isPresented: $showingManageSubscriptions)
+        .manageSubscriptionsSheetIfAvailable(isPresented: $showingManageSubscriptions)
         .alert(item: $alert) { error in
             Alert(
                 title: Text(error.title),
@@ -105,5 +115,16 @@ private struct _ManageSubscriptionsButtonImpl<Label: View>: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func manageSubscriptionsSheetIfAvailable(isPresented: Binding<Bool>) -> some View {
+        #if os(iOS) || os(visionOS)
+        manageSubscriptionsSheet(isPresented: isPresented)
+        #else
+        self
+        #endif
     }
 }
