@@ -106,7 +106,7 @@ public struct AppSubscriptionTier: Identifiable {
 // MARK: - Theme Configuration
 
 /// Theme configuration for the subscription shop
-public struct SubscriptionShopTheme {
+public struct SubscriptionShopTheme: Sendable {
     public let primaryGradientColors: [Color]
     public let accentGlowColor: Color
     public let titleColor: Color
@@ -114,14 +114,14 @@ public struct SubscriptionShopTheme {
     public let cardStyle: CardStyle
     public let heroStyle: HeroStyle
 
-    public enum CardStyle {
+    public enum CardStyle: Sendable {
         case glass
         case solid
         case elevated
         case gradient
     }
 
-    public enum HeroStyle {
+    public enum HeroStyle: Sendable {
         case floating
         case simple
         case bordered
