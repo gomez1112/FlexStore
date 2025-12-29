@@ -91,10 +91,61 @@ struct RootView: View {
 
 - **Paywall layout:** `FlexSubscriptionPaywall` lets you supply custom backgrounds, headers, feature rows, icons, and completion handlers while still using the native `SubscriptionStoreView` picker.
 - **Marketing hero:** `DefaultPassMarketingView` provides a ready-made hero + bullet list. Swap in your own marketing view or customize feature rows with `FlexDefaultFeatureRow`.
+- **Subscription shop:** `SubscriptionShopView` delivers a reusable, App Store-style subscription shop with built-in themes, tiers, and optional feature lists. Provide your own background with `SubscriptionShopViewWithCustomBackground`.
 - **Buttons:** Use `NonConsumablePurchaseButton`, `ConsumablePurchaseButton`, `RestorePurchasesButton`, and `ManageSubscriptionsButton` for drop-in controls. Each offers a `.label { state in ... }` customization point.
 - **Gating:** Choose `TierGate` for hard gating or `BlurredTierGate` for soft gating with an upgrade overlay.
 
 ---
+
+## Subscription Shop Example
+
+```swift
+import SwiftUI
+import FlexStore
+
+private let tiers = [
+    AppSubscriptionTier(
+        productID: "com.myapp.pro.monthly",
+        systemImage: "sparkles",
+        color: .purple
+    ),
+    AppSubscriptionTier(
+        productID: "com.myapp.pro.yearly",
+        systemImage: "crown.fill",
+        color: .orange
+    )
+]
+
+private let features = [
+    SubscriptionFeature(
+        icon: "bolt.fill",
+        title: "Unlimited Access",
+        description: "Unlock every tool and template.",
+        accentColor: .purple
+    ),
+    SubscriptionFeature(
+        icon: "hand.thumbsup.fill",
+        title: "Priority Support",
+        description: "Get fast responses from the team.",
+        accentColor: .orange
+    )
+]
+
+private let configuration = SubscriptionShopConfiguration(
+    title: "Premium Pass",
+    subtitle: "Upgrade to unlock the full experience.",
+    heroSystemImage: "star.fill",
+    features: features,
+    tiers: tiers,
+    theme: .skyPurple
+)
+
+struct SubscriptionShopScreen: View {
+    var body: some View {
+        SubscriptionShopView(groupID: "21345678", configuration: configuration)
+    }
+}
+```
 
 ## Advanced Usage
 
@@ -131,4 +182,3 @@ struct RootView: View {
 - **Map tiers intentionally:** Prefer mapping tiers via subscription group `levelOfService`. Keep `init?(productID:)` as a fallback for explicit control or non-subscription tiers.
 - **Route consumables through the catalog:** If you previously handled consumables ad-hoc, register them in `ConsumableCatalog` and wire through `installConsumables` to centralize validation and error handling.
 - **Adopt the provided UI components:** The bundled buttons, paywalls, and gates handle loading states, errors, and entitlement updates. Swap custom code for these components to reduce maintenance.
-
