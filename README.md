@@ -90,6 +90,7 @@ struct RootView: View {
 ## Customization
 
 - **Paywall layout:** `FlexSubscriptionPaywall` lets you supply custom backgrounds, headers, feature rows, icons, and completion handlers while still using the native `SubscriptionStoreView` picker.
+- **Feature spotlight:** `FlexFeatureSpotlightView` rotates through a single highlighted feature with optional auto-advance controls, perfect for compact paywalls.
 - **Marketing hero:** `DefaultPassMarketingView` provides a ready-made hero + bullet list. Swap in your own marketing view or customize feature rows with `FlexDefaultFeatureRow`.
 - **Subscription shop:** `SubscriptionShopView` delivers a reusable, App Store-style subscription shop with built-in themes, tiers, and optional feature lists. Provide your own background with `SubscriptionShopViewWithCustomBackground`.
 - **Buttons:** Use `NonConsumablePurchaseButton`, `ConsumablePurchaseButton`, `RestorePurchasesButton`, and `ManageSubscriptionsButton` for drop-in controls. Each offers a `.label { state in ... }` customization point.
@@ -143,6 +144,38 @@ private let configuration = SubscriptionShopConfiguration(
 struct SubscriptionShopScreen: View {
     var body: some View {
         SubscriptionShopView(groupID: "21345678", configuration: configuration)
+    }
+}
+```
+
+## Feature Spotlight Example
+
+```swift
+import SwiftUI
+import FlexStore
+
+private let spotlightFeatures = [
+    FlexPaywallFeature(
+        systemImage: "star.fill",
+        title: "Curated Highlights",
+        subtitle: "Showcase one premium benefit at a time.",
+        tint: .yellow
+    ),
+    FlexPaywallFeature(
+        systemImage: "sparkles",
+        title: "Auto-Rotating Spotlight",
+        subtitle: "Gently cycles through what users unlock.",
+        tint: .purple
+    )
+]
+
+struct SpotlightSection: View {
+    var body: some View {
+        FlexFeatureSpotlightView(
+            features: spotlightFeatures,
+            autoAdvanceInterval: .seconds(5),
+            showsControls: true
+        )
     }
 }
 ```
