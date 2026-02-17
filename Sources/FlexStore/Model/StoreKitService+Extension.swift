@@ -19,15 +19,17 @@ public extension StoreKitService {
         catalog: ConsumableCatalog,
         economy: some EconomyStore
     ) {
-        self.onConsumablePurchased = { [weak self] productID in
-            guard let grant = catalog.grant(for: productID) else { return }
+        self.onConsumablePurchasedResult = { [weak self] productID in
+            guard let grant = catalog.grant(for: productID) else { return true }
             do {
                 try economy.apply(grant)
+                return true
             } catch {
                 self?.onEconomyError?(error)
 #if DEBUG
                 print("FlexStore economy apply failed:", error)
 #endif
+                return false
             }
         }
     }

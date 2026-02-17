@@ -89,6 +89,10 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     public var onConsumablePurchased: (@MainActor @Sendable (String) -> Void)?
 
     @ObservationIgnored
+    /// Callback invoked to apply a consumable grant and report success. Return false to retry later.
+    public var onConsumablePurchasedResult: (@MainActor @Sendable (String) async -> Bool)?
+
+    @ObservationIgnored
     /// Callback invoked when applying a consumable grant to the app's economy throws.
     public var onEconomyError: (@MainActor @Sendable (Error) -> Void)?
 
@@ -98,12 +102,14 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     // MARK: - Private
     
     @ObservationIgnored private let logger = Logger(subsystem: "FlexStore", category: "StoreKitService")
+    @ObservationIgnored private let consumableLedgerKey = "FlexStore.processedConsumableTransactions"
     
     @ObservationIgnored private var configuredGroupID: String?
     @ObservationIgnored private var observingTasks: [Task<Void, Never>] = []
     
     /// Creates a new StoreKit service and immediately starts observing transaction streams.
     public init() {
+        processedConsumableTransactionIDs = loadProcessedConsumables()
         startObservingTransactions()
     }
     
@@ -185,8 +191,12 @@ public final class StoreKitService<Tier: SubscriptionTier> {
         switch result {
             case .success(let verification):
                 let transaction = try checkVerified(verification)
-                await process(transaction: transaction)
-                await transaction.finish()
+                let shouldFinish = await process(transaction: transaction)
+                if shouldFinish {
+                    await transaction.finish()
+                } else {
+                    logger.warning("Consumable not applied, leaving transaction unfinished for retry.")
+                }
                 return .success
                 
             case .userCancelled:
@@ -268,8 +278,12 @@ public final class StoreKitService<Tier: SubscriptionTier> {
             for await update in Transaction.updates {
                 if Task.isCancelled { return }
                 if let transaction = try? self.checkVerified(update) {
-                    await self.process(transaction: transaction)
-                    await transaction.finish()
+                    let shouldFinish = await self.process(transaction: transaction)
+                    if shouldFinish {
+                        await transaction.finish()
+                    } else {
+                        self.logger.warning("Consumable not applied, leaving transaction unfinished for retry.")
+                    }
                 }
             }
         })
@@ -280,8 +294,12 @@ public final class StoreKitService<Tier: SubscriptionTier> {
             for await unfinished in Transaction.unfinished {
                 if Task.isCancelled { return }
                 if let transaction = try? self.checkVerified(unfinished) {
-                    await self.process(transaction: transaction)
-                    await transaction.finish()
+                    let shouldFinish = await self.process(transaction: transaction)
+                    if shouldFinish {
+                        await transaction.finish()
+                    } else {
+                        self.logger.warning("Consumable not applied, leaving transaction unfinished for retry.")
+                    }
                 }
             }
         })
@@ -294,30 +312,43 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     
     // MARK: - Processing
     
-    private func process(transaction: Transaction) async {
+    private func process(transaction: Transaction) async -> Bool {
         switch transaction.productType {
             case .consumable:
                 let id = transaction.id
-                guard !processedConsumableTransactionIDs.contains(id) else { return }
+                guard !processedConsumableTransactionIDs.contains(id) else { return true }
+
+                guard transaction.revocationDate == nil else { return true }
+
+                let applied: Bool
+                if let handler = onConsumablePurchasedResult {
+                    applied = await handler(transaction.productID)
+                } else {
+                    onConsumablePurchased?(transaction.productID)
+                    applied = true
+                }
+
+                guard applied else { return false }
                 processedConsumableTransactionIDs.insert(id)
-                
-                guard transaction.revocationDate == nil else { return }
-                onConsumablePurchased?(transaction.productID)
-                
+                persistProcessedConsumables()
+                return true
+
             case .nonConsumable, .nonRenewable:
                 if transaction.revocationDate == nil {
                     purchasedNonConsumables.insert(transaction.productID)
                 } else {
                     purchasedNonConsumables.remove(transaction.productID)
                 }
-                
+                return true
+
             case .autoRenewable:
                 if let groupID = configuredGroupID {
                     await refreshSubscriptionStatus(groupID: groupID)
                 }
-                
+                return true
+
             default:
-                break
+                return true
         }
     }
 
@@ -326,7 +357,8 @@ public final class StoreKitService<Tier: SubscriptionTier> {
         var active: Set<String> = []
         
         for await entitlement in Transaction.currentEntitlements {
-            if let t = try? checkVerified(entitlement), t.productType == .nonConsumable {
+            if let t = try? checkVerified(entitlement),
+               t.productType == .nonConsumable || t.productType == .nonRenewable {
                 active.insert(t.productID)
             }
         }
@@ -383,5 +415,15 @@ public final class StoreKitService<Tier: SubscriptionTier> {
             case .verified(let safe):
                 return safe
         }
+    }
+
+    private func loadProcessedConsumables() -> Set<UInt64> {
+        let stored = UserDefaults.standard.array(forKey: consumableLedgerKey) as? [String] ?? []
+        return Set(stored.compactMap { UInt64($0) })
+    }
+
+    private func persistProcessedConsumables() {
+        let stored = processedConsumableTransactionIDs.map { String($0) }
+        UserDefaults.standard.set(stored, forKey: consumableLedgerKey)
     }
 }
