@@ -25,7 +25,7 @@ public struct SubscriptionStorePolicies: Sendable {
     }
 }
 
-extension View {
+public extension View {
     @ViewBuilder
     func flexStorePolicies(_ policies: SubscriptionStorePolicies?) -> some View {
         if let policies,
