@@ -16,6 +16,7 @@ public struct SubscriptionPassStoreView<Tier: SubscriptionTier, MarketingContent
     private let visibleRelationships: Product.SubscriptionRelationship
     private let iconProvider: (Tier, Product) -> Image
     private let marketing: () -> MarketingContent
+    private let policies: SubscriptionStorePolicies?
 
     /// Creates a subscription pass store view with custom marketing content and iconography.
     ///
@@ -23,16 +24,19 @@ public struct SubscriptionPassStoreView<Tier: SubscriptionTier, MarketingContent
     ///   - groupID: Subscription group identifier to present.
     ///   - visibleRelationships: Filters which subscription relationships are shown. Defaults to `.all`.
     ///   - iconProvider: Closure returning an icon for the resolved tier and product.
+    ///   - policies: Optional custom destinations for privacy policy and terms links.
     ///   - marketing: View builder used to present marketing content above the picker.
     public init(
         groupID: String,
         visibleRelationships: Product.SubscriptionRelationship = .all,
         iconProvider: @escaping (Tier, Product) -> Image = { _, _ in Image(systemName: "star.fill") },
+        policies: SubscriptionStorePolicies? = nil,
         @ViewBuilder marketing: @escaping () -> MarketingContent
     ) {
         self.groupID = groupID
         self.visibleRelationships = visibleRelationships
         self.iconProvider = iconProvider
+        self.policies = policies
         self.marketing = marketing
     }
     
@@ -53,6 +57,7 @@ public struct SubscriptionPassStoreView<Tier: SubscriptionTier, MarketingContent
             return iconProvider(tier, product)
                 .symbolVariant(.fill)
         }
+        .flexStorePolicies(policies)
 #if !os(watchOS)
         .subscriptionStoreButtonLabel(.multiline)
         .subscriptionStorePickerItemBackground(.thinMaterial)

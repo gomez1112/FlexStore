@@ -20,6 +20,7 @@ public struct SubscriptionShopConfiguration {
     public let tiers: [AppSubscriptionTier]
     public let theme: SubscriptionShopTheme
     public let pickerBackground: AnyShapeStyle
+    public let policies: SubscriptionStorePolicies?
     
     /// Full initializer with all options
     public init(
@@ -30,7 +31,8 @@ public struct SubscriptionShopConfiguration {
         features: [SubscriptionFeature]? = nil,
         tiers: [AppSubscriptionTier],
         theme: SubscriptionShopTheme = .default,
-        pickerBackground: some ShapeStyle = Material.thinMaterial
+        pickerBackground: some ShapeStyle = Material.thinMaterial,
+        policies: SubscriptionStorePolicies? = nil
     ) {
         self.title = title
         self.subtitle = subtitle
@@ -40,6 +42,7 @@ public struct SubscriptionShopConfiguration {
         self.tiers = tiers
         self.theme = theme
         self.pickerBackground = AnyShapeStyle(pickerBackground)
+        self.policies = policies
     }
     
     /// Convenience initializer for simple setup (Apple-style, no features list)
@@ -50,7 +53,8 @@ public struct SubscriptionShopConfiguration {
         heroSystemImage: String? = nil,
         tiers: [AppSubscriptionTier],
         theme: SubscriptionShopTheme = .default,
-        pickerBackground: some ShapeStyle = Material.thinMaterial
+        pickerBackground: some ShapeStyle = Material.thinMaterial,
+        policies: SubscriptionStorePolicies? = nil
     ) -> SubscriptionShopConfiguration {
         SubscriptionShopConfiguration(
             title: title,
@@ -60,7 +64,8 @@ public struct SubscriptionShopConfiguration {
             features: nil,
             tiers: tiers,
             theme: theme,
-            pickerBackground: pickerBackground
+            pickerBackground: pickerBackground,
+            policies: policies
         )
     }
 }
@@ -288,6 +293,7 @@ public struct SubscriptionShopView: View {
         .onInAppPurchaseCompletion { _, _ in
             dismiss()
         }
+        .flexStorePolicies(configuration.policies)
     }
     
     private func findTier(for productID: String) -> AppSubscriptionTier {

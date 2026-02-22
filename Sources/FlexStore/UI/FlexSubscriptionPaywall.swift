@@ -26,6 +26,7 @@ public struct FlexSubscriptionPaywall<Tier: SubscriptionTier, Header: View, Back
 
     private let iconProvider: (Tier, Product) -> Image
     private let onPurchaseCompletion: (@MainActor (Product) -> Void)?
+    private let policies: SubscriptionStorePolicies?
 
     /// Creates a subscription paywall with custom header, background, and feature rows.
     ///
@@ -38,6 +39,7 @@ public struct FlexSubscriptionPaywall<Tier: SubscriptionTier, Header: View, Back
     ///   - useMultilineButtonLabel: Determines whether purchase buttons wrap text onto multiple lines.
     ///   - iconProvider: Closure returning an image for each tier/product combination.
     ///   - onPurchaseCompletion: Optional callback invoked when a purchase succeeds.
+    ///   - policies: Optional custom destinations for privacy policy and terms links.
     ///   - background: Background view behind the store content.
     ///   - header: Header view displayed above the product picker.
     ///   - featureRow: View builder for each feature in ``FlexPaywallFeature``.
@@ -50,6 +52,7 @@ public struct FlexSubscriptionPaywall<Tier: SubscriptionTier, Header: View, Back
         useMultilineButtonLabel: Bool = true,
         iconProvider: @escaping (Tier, Product) -> Image,
         onPurchaseCompletion: (@MainActor (Product) -> Void)? = nil,
+        policies: SubscriptionStorePolicies? = nil,
         @ViewBuilder background: @escaping () -> Background,
         @ViewBuilder header: @escaping () -> Header,
         @ViewBuilder featureRow: @escaping (FlexPaywallFeature) -> FeatureRow
@@ -62,6 +65,7 @@ public struct FlexSubscriptionPaywall<Tier: SubscriptionTier, Header: View, Back
         self.useMultilineButtonLabel = useMultilineButtonLabel
         self.iconProvider = iconProvider
         self.onPurchaseCompletion = onPurchaseCompletion
+        self.policies = policies
         self.background = background
         self.header = header
         self.featureRow = featureRow
@@ -98,6 +102,7 @@ public struct FlexSubscriptionPaywall<Tier: SubscriptionTier, Header: View, Back
                     onPurchaseCompletion?(product)
                 }
             }
+            .flexStorePolicies(policies)
 
 #if !os(watchOS)
             .subscriptionStorePickerItemBackground(pickerItemMaterial)
