@@ -81,9 +81,15 @@ public struct FlexSubscriptionPaywall<Tier: SubscriptionTier, Header: View, Back
                         featuresSection
                     }
                 }
+#if os(watchOS)
+                .background {
+                    background()
+                }
+#else
                 .containerBackground(for: .subscriptionStoreFullHeight) {
                     background()
                 }
+#endif
             }
             .backgroundStyle(.clear)
             .subscriptionStoreControlIcon { product, info in
