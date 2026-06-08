@@ -280,22 +280,30 @@ public struct SubscriptionShopView: View {
     public var body: some View {
         SubscriptionStoreView(groupID: groupID) {
             SubscriptionMarketingContent(configuration: configuration)
+                #if !os(watchOS)
                 .containerBackground(for: .subscriptionStoreFullHeight) {
                     SubscriptionBackground(theme: configuration.theme)
                 }
+                #else
+                .background {
+                    SubscriptionBackground(theme: configuration.theme)
+                }
+                #endif
         }
         .backgroundStyle(.clear)
+        #if !os(watchOS)
         .subscriptionStoreButtonLabel(.multiline)
         .subscriptionStorePickerItemBackground(configuration.pickerBackground)
         .subscriptionStoreControlIcon { product, _ in
             TierBadge(tier: findTier(for: product.id))
         }
+        #endif
         .onInAppPurchaseCompletion { _, _ in
             dismiss()
         }
         .flexStorePolicies(configuration.policies)
     }
-    
+
     private func findTier(for productID: String) -> AppSubscriptionTier {
         configuration.tiers.first { $0.id == productID } ?? configuration.tiers.first!
     }
@@ -763,16 +771,24 @@ public struct SubscriptionShopViewWithCustomBackground<Background: View>: View {
     public var body: some View {
         SubscriptionStoreView(groupID: groupID) {
             SubscriptionMarketingContent(configuration: configuration)
+                #if !os(watchOS)
                 .containerBackground(for: .subscriptionStoreFullHeight) {
                     background
                 }
+                #else
+                .background {
+                    background
+                }
+                #endif
         }
         .backgroundStyle(.clear)
+        #if !os(watchOS)
         .subscriptionStoreButtonLabel(.multiline)
         .subscriptionStorePickerItemBackground(configuration.pickerBackground)
         .subscriptionStoreControlIcon { product, _ in
             TierBadge(tier: findTier(for: product.id))
         }
+        #endif
         .onInAppPurchaseCompletion { _, _ in
             dismiss()
         }
