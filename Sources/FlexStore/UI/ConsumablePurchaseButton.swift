@@ -44,7 +44,7 @@ public struct FlexStoreDefaultConsumableLabel: View {
             case .purchasing:
                 HStack(spacing: 8) {
                     ProgressView()
-                    Text("Processing…")
+                    Text(LocalizedStringResource("Processing…", bundle: .module))
                 }
             case .success:
                 Label(successTitle, systemImage: "checkmark.circle.fill")
@@ -131,12 +131,17 @@ private struct _ConsumablePurchaseButtonImpl<Tier: SubscriptionTier, Label: View
             label(state)
         }
         .disabled(state == .purchasing)
-        .alert(item: $alert) { err in
-            Alert(
-                title: Text(err.title),
-                message: Text(err.message),
-                dismissButton: .default(Text("OK"))
-            )
+        .alert(
+            alert.map { String(localized: $0.title) } ?? "",
+            isPresented: Binding(
+                get: { alert != nil },
+                set: { if !$0 { alert = nil } }
+            ),
+            presenting: alert
+        ) { _ in
+            Button("OK", role: .cancel) { alert = nil }
+        } message: { error in
+            Text(error.message)
         }
     }
     

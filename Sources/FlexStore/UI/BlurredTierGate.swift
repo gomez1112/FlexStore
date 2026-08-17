@@ -78,7 +78,9 @@ public struct BlurredTierGate<Tier: SubscriptionTier, Content: View>: View {
                     .padding(.horizontal, 16)
             }
             .buttonStyle(.borderedProminent)
+            #if !os(tvOS)
             .controlSize(.small)
+            #endif
         }
         .padding(20)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))

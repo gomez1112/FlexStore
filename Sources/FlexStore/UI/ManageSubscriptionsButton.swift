@@ -34,7 +34,7 @@ public struct FlexStoreDefaultManageSubscriptionsLabel: View {
         if isOpening {
             HStack {
                 ProgressView()
-                Text("Opening App Store…")
+                Text(LocalizedStringResource("Opening App Store…", bundle: .module))
             }
         } else {
             Label(title, systemImage: systemImage)
@@ -87,7 +87,6 @@ private struct _ManageSubscriptionsButtonImpl<Label: View>: View {
     @Environment(\.openURL) private var openURL
 
     @State private var isOpening = false
-    @State private var alert: FlexStoreError?
     @State private var showingManageSubscriptions = false
 
     let label: (Bool) -> Label
@@ -97,24 +96,15 @@ private struct _ManageSubscriptionsButtonImpl<Label: View>: View {
             #if os(iOS) || os(visionOS)
             showingManageSubscriptions = true
             #else
-            isOpening = true
             if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
                 openURL(url)
             }
-            isOpening = false
             #endif
         } label: {
             label(isOpening)
         }
         .disabled(isOpening)
         .manageSubscriptionsSheetIfAvailable(isPresented: $showingManageSubscriptions)
-        .alert(item: $alert) { error in
-            Alert(
-                title: Text(error.title),
-                message: Text(error.message),
-                dismissButton: .default(Text("OK"))
-            )
-        }
     }
 }
 

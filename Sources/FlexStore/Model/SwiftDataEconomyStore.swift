@@ -89,18 +89,19 @@ public struct SwiftDataEconomyStore<Profile: PersistentModel>: EconomyStore {
     public func apply(_ grant: ConsumableGrant) throws {
         var profile = try fetchOrCreateProfile()
         
-        if let applier = customAppliers[grant.kind] {
-            try applier(&profile, grant.amount)
+        do {
+            if let applier = customAppliers[grant.kind] {
+                try applier(&profile, grant.amount)
+            } else if let keyPath = intBalances[grant.kind] {
+                profile[keyPath: keyPath] += grant.amount
+            } else {
+                return
+            }
             try context.save()
-            return
+        } catch {
+            context.rollback()
+            throw error
         }
-        
-        guard let keyPath = intBalances[grant.kind] else {
-            return // unknown kind => no-op
-        }
-        
-        profile[keyPath: keyPath] += grant.amount
-        try context.save()
     }
     
     // MARK: - Helpers
