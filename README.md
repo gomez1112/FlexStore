@@ -77,7 +77,7 @@ struct RootView: View {
     var body: some View {
         VStack(spacing: 12) {
             Text(store.isSubscribed ? "Subscribed ✅" : "Free Tier")
-            Text("Plan: \(store.planName)").foregroundStyle(.secondary)
+            Text(store.planName).foregroundStyle(.secondary)
             Text(store.renewalStatusString).font(.footnote).foregroundStyle(.secondary)
         }
         .padding()
@@ -105,12 +105,12 @@ import SwiftUI
 import FlexStore
 
 private let tiers = [
-    AppSubscriptionTier(
+    SubscriptionShopProduct(
         productID: "com.myapp.pro.monthly",
         systemImage: "sparkles",
         color: .purple
     ),
-    AppSubscriptionTier(
+    SubscriptionShopProduct(
         productID: "com.myapp.pro.yearly",
         systemImage: "crown.fill",
         color: .orange
@@ -188,7 +188,7 @@ struct SpotlightSection: View {
   - Connect everything with `StoreKitService.installConsumables(catalog:economy:)` and optional `onEconomyError`.
 - **Subscription insights:** `StoreKitService` exposes `planName`, `renewalDate`, `willAutoRenew`, `upcomingPlanName`, `isFreeTrial`, and `isBillingRetry` for richer messaging.
 - **Product helpers:** Call `product(for:)` to fetch metadata, or use `loadProducts(_:)` when you need a bespoke set of IDs outside of `attachStoreKit`.
-- **Hooks:** Respond to completed purchases with `onPurchaseCompletion` in `FlexSubscriptionPaywall`, or set `onConsumablePurchased` to trigger custom flows.
+- **Hooks:** Respond to completed purchases with `onPurchaseCompletion` in `FlexSubscriptionPaywall`, or set `onConsumablePurchasedResult` to persist consumable grants.
 
 ---
 
@@ -215,3 +215,16 @@ struct SpotlightSection: View {
 - **Map tiers intentionally:** Prefer mapping tiers via subscription group `levelOfService`. Keep `init?(productID:)` as a fallback for explicit control or non-subscription tiers.
 - **Route consumables through the catalog:** If you previously handled consumables ad-hoc, register them in `ConsumableCatalog` and wire through `installConsumables` to centralize validation and error handling.
 - **Adopt the provided UI components:** The bundled buttons, paywalls, and gates handle loading states, errors, and entitlement updates. Swap custom code for these components to reduce maintenance.
+
+
+## Consumable delivery guarantees
+
+FlexStore verifies transactions, leaves failed grants unfinished, rolls back failed SwiftData saves, and keeps a configurable bounded deduplication ledger. Pass an App Group `UserDefaults` suite to `StoreKitService` if an extension also processes purchases. The ledger supplements `Transaction.finish()`; it is not an atomic exactly-once guarantee with an app's separate economy database. A crash after the economy commits but before the ledger is written can replay a grant. Applications requiring exact-once delivery must store the StoreKit transaction ID and balance mutation in the same atomic transaction.
+
+## Migrating to 2.0
+
+- `AppSubscriptionTier` → `SubscriptionShopProduct` (a deprecated alias is temporarily available).
+- `FlexStoreError(title: String, message: String)` → `FlexStoreError(title: LocalizedStringResource, message: LocalizedStringResource)`.
+- `StoreKitService.planName: String` → `LocalizedStringResource` and `renewalStatusString: String` → `LocalizedStringResource`.
+- Prefer `onConsumablePurchasedResult`; the legacy fire-and-forget hook is deprecated and loses precedence when both are set.
+- Use `StoreKitService(userDefaults:consumableLedgerLimit:)` to select shared ledger storage and retention.

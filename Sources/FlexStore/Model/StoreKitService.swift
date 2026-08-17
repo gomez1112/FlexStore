@@ -54,7 +54,10 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     public var activeProductID: String? { currentSubscriptionProduct?.id }
 
     /// The display name of the active subscription product, or "Inactive" when no subscription is active.
-    public var planName: String { currentSubscriptionProduct?.displayName ?? "Inactive" }
+    public var planName: LocalizedStringResource {
+        currentSubscriptionProduct.map { LocalizedStringResource(stringLiteral: $0.displayName) }
+            ?? LocalizedStringResource("Inactive", bundle: .module)
+    }
 
     /// The display name for the auto-renew target, if it differs from the current product.
     public var upcomingPlanName: String? {
@@ -65,20 +68,19 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     }
     
     /// Human-friendly description of the current renewal state for UI labels.
-    public var renewalStatusString: String {
-        if isBillingRetry { return "Payment Failed - Update Info" }
-        guard let date = renewalDate else { return "No active subscription" }
-        
-        let dateString = date.formatted(date: .abbreviated, time: .omitted)
-        
+    public var renewalStatusString: LocalizedStringResource {
+        if isBillingRetry { return LocalizedStringResource("Payment Failed – Update Info", bundle: .module) }
+        guard let date = renewalDate else { return LocalizedStringResource("No active subscription", bundle: .module) }
         if willAutoRenew {
             if let nextName = upcomingPlanName,
                autoRenewPreferenceID != currentSubscriptionProduct?.id {
-                return "Renews to \(nextName) on \(dateString)"
+                return LocalizedStringResource("Renews to \(nextName) on \(date, format: .dateTime.month(.abbreviated).day().year())", bundle: .module)
             }
-            return isFreeTrial ? "Trial ends on \(dateString)" : "Renews on \(dateString)"
+            return isFreeTrial
+                ? LocalizedStringResource("Trial ends on \(date, format: .dateTime.month(.abbreviated).day().year())", bundle: .module)
+                : LocalizedStringResource("Renews on \(date, format: .dateTime.month(.abbreviated).day().year())", bundle: .module)
         } else {
-            return "Expires on \(dateString)"
+            return LocalizedStringResource("Expires on \(date, format: .dateTime.month(.abbreviated).day().year())", bundle: .module)
         }
     }
     
@@ -86,6 +88,7 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     
     @ObservationIgnored
     /// Callback invoked when a consumable transaction is verified and ready to be applied.
+    @available(*, deprecated, message: "Use onConsumablePurchasedResult; when both are set, the result-returning handler takes precedence.")
     public var onConsumablePurchased: (@MainActor @Sendable (String) -> Void)?
 
     @ObservationIgnored
@@ -96,20 +99,27 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     /// Callback invoked when applying a consumable grant to the app's economy throws.
     public var onEconomyError: (@MainActor @Sendable (Error) -> Void)?
 
-    @ObservationIgnored
-    private var processedConsumableTransactionIDs: Set<UInt64> = []
+    @ObservationIgnored private var processedConsumableTransactionIDs: Set<UInt64> = []
+    @ObservationIgnored private var processedConsumableTransactionOrder: [UInt64] = []
 
     // MARK: - Private
     
     @ObservationIgnored private let logger = Logger(subsystem: "FlexStore", category: "StoreKitService")
     @ObservationIgnored private let consumableLedgerKey = "FlexStore.processedConsumableTransactions"
+    @ObservationIgnored private let ledgerDefaults: UserDefaults
+    @ObservationIgnored private let consumableLedgerLimit: Int
+    @ObservationIgnored private var productsHaveLoaded = false
     
     @ObservationIgnored private var configuredGroupID: String?
     @ObservationIgnored private var observingTasks: [Task<Void, Never>] = []
     
     /// Creates a new StoreKit service and immediately starts observing transaction streams.
-    public init() {
-        processedConsumableTransactionIDs = loadProcessedConsumables()
+    public init(userDefaults: UserDefaults = .standard, consumableLedgerLimit: Int = 1_000) {
+        precondition(consumableLedgerLimit > 0, "consumableLedgerLimit must be positive")
+        ledgerDefaults = userDefaults
+        self.consumableLedgerLimit = consumableLedgerLimit
+        processedConsumableTransactionOrder = Self.loadProcessedConsumables(from: userDefaults, key: consumableLedgerKey, limit: consumableLedgerLimit)
+        processedConsumableTransactionIDs = Set(processedConsumableTransactionOrder)
         startObservingTransactions()
     }
     
@@ -125,6 +135,7 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     ///   - productIDs: The set of product identifiers to load.
     ///   - subscriptionGroupID: The subscription group identifier to query for status updates.
     public func configure(productIDs: Set<String>, subscriptionGroupID: String?) async {
+        configuredGroupID = subscriptionGroupID
         if !productIDs.isEmpty {
             await loadProducts(productIDs)
         }
@@ -147,6 +158,7 @@ public final class StoreKitService<Tier: SubscriptionTier> {
         do {
             let fetched = try await Product.products(for: Array(ids))
             products = fetched.sorted { $0.price < $1.price }
+            productsHaveLoaded = true
         } catch {
             logger.error("Failed to fetch products: \(error.localizedDescription)")
         }
@@ -234,8 +246,6 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     ///
     /// - Parameter groupID: The group identifier to query.
     public func refreshSubscriptionStatus(groupID: String) async {
-        configuredGroupID = groupID
-        
         do {
             let statuses = try await Product.SubscriptionInfo.status(for: groupID)
             
@@ -277,7 +287,7 @@ public final class StoreKitService<Tier: SubscriptionTier> {
             guard let self else { return }
             for await update in Transaction.updates {
                 if Task.isCancelled { return }
-                if let transaction = try? self.checkVerified(update) {
+                if let transaction = self.verifiedOrLog(update, stream: "updates") {
                     let shouldFinish = await self.process(transaction: transaction)
                     if shouldFinish {
                         await transaction.finish()
@@ -293,7 +303,7 @@ public final class StoreKitService<Tier: SubscriptionTier> {
             guard let self else { return }
             for await unfinished in Transaction.unfinished {
                 if Task.isCancelled { return }
-                if let transaction = try? self.checkVerified(unfinished) {
+                if let transaction = self.verifiedOrLog(unfinished, stream: "unfinished") {
                     let shouldFinish = await self.process(transaction: transaction)
                     if shouldFinish {
                         await transaction.finish()
@@ -330,6 +340,12 @@ public final class StoreKitService<Tier: SubscriptionTier> {
 
                 guard applied else { return false }
                 processedConsumableTransactionIDs.insert(id)
+                processedConsumableTransactionOrder.removeAll { $0 == id }
+                processedConsumableTransactionOrder.append(id)
+                if processedConsumableTransactionOrder.count > consumableLedgerLimit {
+                    processedConsumableTransactionOrder.removeFirst(processedConsumableTransactionOrder.count - consumableLedgerLimit)
+                    processedConsumableTransactionIDs = Set(processedConsumableTransactionOrder)
+                }
                 persistProcessedConsumables()
                 return true
 
@@ -396,6 +412,11 @@ public final class StoreKitService<Tier: SubscriptionTier> {
         // Prefer mapping by productID (best for clarity)
         if let t = Tier(productID: transaction.productID) { return t }
         
+        guard productsHaveLoaded else {
+            logger.error("Cannot resolve tier for \(transaction.productID, privacy: .public) before products load; retaining the existing entitlement until resolution is possible.")
+            return subscriptionTier
+        }
+
         // Fallback: map via group level
         if let product = products.first(where: { $0.id == transaction.productID }),
            let groupLevel = product.subscription?.groupLevel,
@@ -408,6 +429,15 @@ public final class StoreKitService<Tier: SubscriptionTier> {
     
     // MARK: - Verification
     
+    private func verifiedOrLog<T>(_ result: VerificationResult<T>, stream: String) -> T? {
+        do { return try checkVerified(result) }
+        catch {
+            // Never finish unverified transactions. StoreKit can retry them when verification succeeds.
+            logger.error("Rejected unverified transaction from \(stream, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
     private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
         switch result {
             case .unverified(_, let error):
@@ -417,13 +447,26 @@ public final class StoreKitService<Tier: SubscriptionTier> {
         }
     }
 
-    private func loadProcessedConsumables() -> Set<UInt64> {
-        let stored = UserDefaults.standard.array(forKey: consumableLedgerKey) as? [String] ?? []
-        return Set(stored.compactMap { UInt64($0) })
+    private static func loadProcessedConsumables(from defaults: UserDefaults, key: String, limit: Int) -> [UInt64] {
+        let stored = defaults.array(forKey: key) as? [String] ?? []
+        return Array(stored.compactMap(UInt64.init).suffix(limit))
     }
 
     private func persistProcessedConsumables() {
-        let stored = processedConsumableTransactionIDs.map { String($0) }
-        UserDefaults.standard.set(stored, forKey: consumableLedgerKey)
+        ledgerDefaults.set(processedConsumableTransactionOrder.map(String.init), forKey: consumableLedgerKey)
     }
+
+    func reportUnmappedConsumable(_ productID: String) {
+        let error = UnmappedConsumableError(productID: productID)
+        logger.error("No consumable grant is mapped for \(productID, privacy: .public); finishing without a grant.")
+        onEconomyError?(error)
+    }
+
+}
+
+
+/// Raised when a paid consumable has no catalog mapping.
+public struct UnmappedConsumableError: LocalizedError, Sendable {
+    public let productID: String
+    public var errorDescription: String? { "No consumable grant is mapped for product \(productID)." }
 }

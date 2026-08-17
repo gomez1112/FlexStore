@@ -27,7 +27,7 @@ public struct FlexStoreDefaultRestoreLabel: View {
         if isRestoring {
             HStack(spacing: 8) {
                 ProgressView()
-                Text("Restoring…")
+                Text(LocalizedStringResource("Restoring…", bundle: .module))
             }
         } else {
             Text(title)

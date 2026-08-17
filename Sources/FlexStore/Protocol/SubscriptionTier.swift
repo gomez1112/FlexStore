@@ -28,7 +28,14 @@ public protocol SubscriptionTier: Comparable, Hashable, CaseIterable, Sendable {
 public extension SubscriptionTier {
     /// Default comparator that follows the order of `allCases`.
     static func < (lhs: Self, rhs: Self) -> Bool {
-        let all = Array(Self.allCases)
-        return (all.firstIndex(of: lhs) ?? 0) < (all.firstIndex(of: rhs) ?? 0)
+        guard let left = Self.allCases.firstIndex(of: lhs),
+              let right = Self.allCases.firstIndex(of: rhs) else {
+            preconditionFailure("A SubscriptionTier value must occur in allCases")
+        }
+        return left < right
     }
+}
+
+public extension SubscriptionTier where Self: RawRepresentable, RawValue: Comparable {
+    static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
 }

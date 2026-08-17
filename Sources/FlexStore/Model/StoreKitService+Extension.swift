@@ -20,7 +20,10 @@ public extension StoreKitService {
         economy: some EconomyStore
     ) {
         self.onConsumablePurchasedResult = { [weak self] productID in
-            guard let grant = catalog.grant(for: productID) else { return true }
+            guard let grant = catalog.grant(for: productID) else {
+                self?.reportUnmappedConsumable(productID)
+                return true
+            }
             do {
                 try economy.apply(grant)
                 return true
@@ -34,5 +37,4 @@ public extension StoreKitService {
         }
     }
 }
-
 

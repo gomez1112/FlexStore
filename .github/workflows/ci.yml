@@ -1,0 +1,24 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  swiftpm:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift build -Xswiftc -warnings-as-errors
+      - run: swift test -Xswiftc -warnings-as-errors
+  destinations:
+    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        destination:
+          - 'platform=iOS Simulator,name=iPhone 17 Pro'
+          - 'platform=macOS'
+          - 'platform=tvOS Simulator,name=Apple TV 4K (3rd generation)'
+          - 'platform=watchOS Simulator,name=Apple Watch Series 11 (46mm)'
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild build -scheme FlexStore -destination '${{ matrix.destination }}' SWIFT_TREAT_WARNINGS_AS_ERRORS=YES

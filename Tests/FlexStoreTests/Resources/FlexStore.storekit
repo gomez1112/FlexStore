@@ -1,0 +1,19 @@
+{
+  "identifier" : "FlexStoreTests",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    { "displayPrice" : "9.99", "familyShareable" : false, "internalID" : "1001", "localizations" : [{"description":"Lifetime access","displayName":"Lifetime","locale":"en_US"}], "productID" : "com.flexstore.lifetime", "referenceName" : "Lifetime", "type" : "NonConsumable" },
+    { "displayPrice" : "0.99", "familyShareable" : false, "internalID" : "1002", "localizations" : [{"description":"Ten coins","displayName":"10 Coins","locale":"en_US"}], "productID" : "com.flexstore.coins10", "referenceName" : "10 Coins", "type" : "Consumable" },
+    { "displayPrice" : "3.99", "familyShareable" : false, "internalID" : "1003", "localizations" : [{"description":"Fifty coins","displayName":"50 Coins","locale":"en_US"}], "productID" : "com.flexstore.coins50", "referenceName" : "50 Coins", "type" : "Consumable" }
+  ],
+  "settings" : { "_applicationInternalID" : "FlexStoreTests", "_developerTeamID" : "" },
+  "subscriptionGroups" : [{
+    "id" : "FlexStoreGroup", "localizations" : [], "name" : "FlexStore Tiers",
+    "subscriptions" : [
+      { "adHocOffers":[], "codeOffers":[], "displayPrice":"4.99", "familyShareable":false, "groupNumber":1, "internalID":"2001", "introductoryOffer":null, "localizations":[{"description":"Monthly Pro","displayName":"Pro Monthly","locale":"en_US"}], "productID":"com.flexstore.pro.monthly", "recurringSubscriptionPeriod":"P1M", "referenceName":"Pro Monthly", "subscriptionGroupID":"FlexStoreGroup", "type":"RecurringSubscription" },
+      { "adHocOffers":[], "codeOffers":[], "displayPrice":"49.99", "familyShareable":false, "groupNumber":1, "internalID":"2002", "introductoryOffer":null, "localizations":[{"description":"Yearly Pro","displayName":"Pro Yearly","locale":"en_US"}], "productID":"com.flexstore.pro.yearly", "recurringSubscriptionPeriod":"P1Y", "referenceName":"Pro Yearly", "subscriptionGroupID":"FlexStoreGroup", "type":"RecurringSubscription" },
+      { "adHocOffers":[], "codeOffers":[], "displayPrice":"9.99", "familyShareable":false, "groupNumber":2, "internalID":"2003", "introductoryOffer":null, "localizations":[{"description":"Monthly Elite","displayName":"Elite Monthly","locale":"en_US"}], "productID":"com.flexstore.elite.monthly", "recurringSubscriptionPeriod":"P1M", "referenceName":"Elite Monthly", "subscriptionGroupID":"FlexStoreGroup", "type":"RecurringSubscription" }
+    ]
+  }],
+  "version" : { "major" : 4, "minor" : 0 }
+}

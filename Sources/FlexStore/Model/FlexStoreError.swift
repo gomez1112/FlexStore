@@ -14,20 +14,20 @@ public struct FlexStoreError: LocalizedError, Identifiable, Sendable {
     public let id = UUID()
 
     /// Short, user-facing title for the error.
-    public let title: String
+    public let title: LocalizedStringResource
 
     /// Descriptive message explaining the issue.
-    public let message: String
+    public let message: LocalizedStringResource
 
     /// Creates a new FlexStore error value.
     ///
     /// - Parameters:
     ///   - title: Short title shown to the user.
     ///   - message: Detailed message suitable for an alert body.
-    public init(title: String, message: String) {
+    public init(title: LocalizedStringResource, message: LocalizedStringResource) {
         self.title = title
         self.message = message
     }
 
-    public var errorDescription: String? { message }
+    public var errorDescription: String? { String(localized: message) }
 }
